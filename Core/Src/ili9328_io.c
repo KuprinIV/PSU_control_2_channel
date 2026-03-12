@@ -53,12 +53,11 @@ void LCD_IO_WriteMultipleData(uint16_t* data, uint32_t size)
 
 /**
   * @brief  ILI9328 LCD read data
-  * @param  reg - register address
+  * @param  None
   * @retval register value
   */
-uint16_t LCD_IO_ReadData(uint8_t reg)
+uint16_t LCD_IO_ReadData(void)
 {
-	*(uint16_t*)(LCD_REG) = reg;
 	return *(uint16_t*)(LCD_DATA);
 }
 

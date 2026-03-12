@@ -12,7 +12,7 @@ void LCD_IO_Init(void);
 void LCD_IO_WriteReg(uint8_t Reg);
 void LCD_IO_WriteData(uint16_t RegValue);
 void LCD_IO_WriteMultipleData(uint16_t* data, uint32_t size);
-uint16_t LCD_IO_ReadData(uint8_t reg);
+uint16_t LCD_IO_ReadData(void);
 void LCD_Delay(uint32_t delay);
 
 #endif

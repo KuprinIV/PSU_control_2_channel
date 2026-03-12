@@ -324,11 +324,11 @@ uint16_t ili9328_ReadPixel(uint16_t Xpos, uint16_t Ypos)
   /* Set Cursor */
   ili9328_SetCursor(Xpos, Ypos);
   
-  /* Prepare to write GRAM */
+  /* Prepare to read GRAM */
   LCD_IO_WriteReg(LCD_REG_34);
   
   /* Read 16-bit Reg */
-  return (LCD_IO_ReadData(LCD_REG_34));
+  return (LCD_IO_ReadData());
 }
 
 /**
@@ -353,10 +353,10 @@ void ili9328_WriteReg(uint8_t LCDReg, uint16_t LCDRegValue)
 uint16_t ili9328_ReadReg(uint8_t LCDReg)
 {
   /* Write 16-bit Index (then Read Reg) */
-//  LCD_IO_WriteReg(LCDReg);
+  LCD_IO_WriteReg(LCDReg);
   
   /* Read 16-bit Reg */
-  return (LCD_IO_ReadData(LCDReg));
+  return (LCD_IO_ReadData());
 }
 
 void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* fb, uint16_t fb_len)
@@ -397,7 +397,7 @@ void ili9328_SetDisplayWindow(uint16_t Xpos, uint16_t Ypos, uint16_t Width, uint
 
 /**
   * @brief  Draw vertical line.
-* @param  RGBCode: Specifies the RGB color   
+  * @param  RGBCode: Specifies the RGB color
   * @param  Xpos:     specifies the X position.
   * @param  Ypos:     specifies the Y position.
   * @param  Length:   specifies the Line length.  
@@ -424,7 +424,7 @@ void ili9328_DrawHLine(uint16_t RGBCode, uint16_t Xpos, uint16_t Ypos, uint16_t 
 
 /**
   * @brief  Draw vertical line.
-* @param  RGBCode: Specifies the RGB color    
+  * @param  RGBCode: Specifies the RGB color
   * @param  Xpos:     specifies the X position.
   * @param  Ypos:     specifies the Y position.
   * @param  Length:   specifies the Line length.  
