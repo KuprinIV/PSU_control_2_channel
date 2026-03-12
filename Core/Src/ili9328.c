@@ -36,8 +36,8 @@
   */
 
 /* Includes ------------------------------------------------------------------*/
+#include "ili9328_io.h"
 #include "ili9328.h"
-#include "ili9325_conf.h"
 
 /** @addtogroup BSP
   * @{
@@ -99,6 +99,9 @@ LCD_DrvTypeDef   ili9328_drv =
 
 static uint8_t Is_ili9328_Initialized = 0;
 static uint16_t ArrayRGB[320] = {0};
+static onDmaTransferCompleteCb callback = NULL;
+
+extern DMA_HandleTypeDef hdma_memtomem_dma2_stream0;
 
 /**
   * @}
@@ -107,7 +110,8 @@ static uint16_t ArrayRGB[320] = {0};
 /** @defgroup ILI9328_Private_FunctionPrototypes
   * @{
   */
-
+static void DMA_TransferComplete(DMA_HandleTypeDef *hdma);
+static void DMA_TransferError(DMA_HandleTypeDef *hdma);
 /**
   * @}
   */ 
@@ -183,6 +187,11 @@ void ili9328_Init(void)
     /* I/D=00 (Horizontal : increment, Vertical : decrement) */
     /* AM=1 (address is updated in vertical writing direction) */
     ili9328_WriteReg(LCD_REG_3, 0x1018);
+//    ili9328_WriteReg(LCD_REG_3, 0x1030);
+
+    // register DMA callbacks
+    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream0, HAL_DMA_XFER_CPLT_CB_ID, DMA_TransferComplete);
+    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream0, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferError);
   }
   
   /* Set the Cursor */ 
@@ -290,7 +299,7 @@ void ili9328_SetCursor(uint16_t Xpos, uint16_t Ypos)
   * @brief  Write pixel.   
   * @param  Xpos: specifies the X position.
   * @param  Ypos: specifies the Y position.
-* @param  RGBCode: the RGB pixel color
+  * @param  RGBCode: the RGB pixel color
   * @retval None
   */
 void ili9328_WritePixel(uint16_t Xpos, uint16_t Ypos, uint16_t RGBCode)
@@ -324,8 +333,8 @@ uint16_t ili9328_ReadPixel(uint16_t Xpos, uint16_t Ypos)
 
 /**
   * @brief  Writes to the selected LCD register.
-* @param  LCDReg:      address of the selected register.
-* @param  LCDRegValue: value to write to the selected register.
+  * @param  LCDReg:      address of the selected register.
+  * @param  LCDRegValue: value to write to the selected register.
   * @retval None
   */
 void ili9328_WriteReg(uint8_t LCDReg, uint16_t LCDRegValue)
@@ -338,7 +347,7 @@ void ili9328_WriteReg(uint8_t LCDReg, uint16_t LCDRegValue)
 
 /**
   * @brief  Reads the selected LCD Register.
-* @param  LCDReg: address of the selected register.
+  * @param  LCDReg: address of the selected register.
   * @retval LCD Register Value.
   */
 uint16_t ili9328_ReadReg(uint8_t LCDReg)
@@ -348,6 +357,21 @@ uint16_t ili9328_ReadReg(uint8_t LCDReg)
   
   /* Read 16-bit Reg */
   return (LCD_IO_ReadData(LCDReg));
+}
+
+void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* fb, uint16_t fb_len)
+{
+	uint16_t height = y2 - y1 + 1;
+	uint16_t width = x2 - x1 + 1;
+
+	// set display window
+	ili9328_SetDisplayWindow(x1, y1, width, height);
+
+	/* Prepare to write GRAM */
+	LCD_IO_WriteReg(LCD_REG_34);
+
+	// write framebuffer GRAM data through the DMA
+	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream0, (uint32_t)fb, (uint32_t)LCD_DATA, width*height);
 }
 
 /**
@@ -361,14 +385,14 @@ uint16_t ili9328_ReadReg(uint8_t LCDReg)
 void ili9328_SetDisplayWindow(uint16_t Xpos, uint16_t Ypos, uint16_t Width, uint16_t Height)
 {
   /* Horizontal GRAM Start Address */
-  ili9328_WriteReg(LCD_REG_80, (Xpos));
+  ili9328_WriteReg(LCD_REG_80, (Ypos));
   /* Horizontal GRAM End Address */
-  ili9328_WriteReg(LCD_REG_81, (Xpos + Height - 1));
+  ili9328_WriteReg(LCD_REG_81, (Ypos + Height - 1));
   
   /* Vertical GRAM Start Address */
-  ili9328_WriteReg(LCD_REG_82, (Ypos));
+  ili9328_WriteReg(LCD_REG_82, (ILI9328_LCD_PIXEL_WIDTH - 1 - Xpos - Width));
   /* Vertical GRAM End Address */
-  ili9328_WriteReg(LCD_REG_83, (Ypos + Width - 1));  
+  ili9328_WriteReg(LCD_REG_83, (ILI9328_LCD_PIXEL_WIDTH - Xpos - 1));
 }
 
 /**
@@ -455,12 +479,54 @@ void ili9328_DrawBitmap(uint16_t Xpos, uint16_t Ypos, uint8_t *pbmp)
   /* Prepare to write GRAM */
   LCD_IO_WriteReg(LCD_REG_34);
  
-  LCD_IO_WriteMultipleData((uint16_t*)pbmp, size);
+  LCD_IO_WriteMultipleData((uint16_t*)pbmp, size/2);
  
   /* Set GRAM write direction and BGR = 1 */
   /* I/D = 01 (Horizontal : increment, Vertical : decrement) */
   /* AM = 1 (address is updated in vertical writing direction) */
   ili9328_WriteReg(LCD_REG_3, 0x1018);
+}
+
+/**
+ * @brief Set on DMA transfer complete callback
+ * @param: cb - callback function pointer
+ * @return: None
+ */
+void ili9328_SetOnDmaTransferCompleteCb(onDmaTransferCompleteCb cb)
+{
+	callback = cb;
+}
+
+/**
+  * @brief  DMA MemToMem Transfer completed callback.
+  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
+  *               the configuration information for DMA module.
+  * @retval None
+  */
+static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
+{
+	if(hdma->Instance == DMA2_Stream0)
+	{
+		/* Inform the interface module that data transfer is complete*/
+		if(callback != NULL)
+		{
+			callback();
+		}
+	}
+}
+
+/**
+  * @brief  DMA MemToMem Transfer error callback.
+  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
+  *               the configuration information for DMA module.
+  * @retval None
+  */
+static void DMA_TransferError(DMA_HandleTypeDef *hdma)
+{
+	if(hdma->Instance == DMA2_Stream0)
+	{
+		// add error handler
+	}
 }
 
 /**

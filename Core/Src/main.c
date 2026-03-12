@@ -22,6 +22,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include "ili9328.h"
+#include "interface.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -56,7 +57,7 @@ DMA_HandleTypeDef hdma_memtomem_dma2_stream0;
 SRAM_HandleTypeDef hsram1;
 
 /* USER CODE BEGIN PV */
-
+volatile uint8_t is_scan_event = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -139,11 +140,14 @@ int main(void)
 
   HAL_Delay(10);
 
+  // init LVGL interface
+  LCDIF_InitInterface();
+
   // test
-  for(uint32_t i = 0; i < 240; i++)
-  {
-	  ili9328_DrawHLine(LCD_COLOR_BLUE, 0, i, 320);
-  }
+//  for(uint32_t i = 0; i < 240; i++)
+//  {
+//	  ili9328_DrawHLine(LCD_COLOR_BLUE, 0, i, 320);
+//  }
 
 
   /* USER CODE END 2 */
@@ -155,6 +159,16 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+	  if(is_scan_event)
+	  {
+		  is_scan_event = 0; // reset flag
+
+		  // increment LVGL tick
+		  LCDIF_UpdateLvglTick();
+
+		  // update LVGL timer
+		  LCDIF_UpdateLvglTimer();
+	  }
   }
   /* USER CODE END 3 */
 }
@@ -314,7 +328,7 @@ static void MX_TIM2_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM2_Init 2 */
-
+  TIM2->CNT = 0x7FFF; // initial counter value
   /* USER CODE END TIM2_Init 2 */
 
 }
@@ -363,7 +377,7 @@ static void MX_TIM3_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM3_Init 2 */
-
+  TIM3->CNT = 0x7FFF; // initial counter value
   /* USER CODE END TIM3_Init 2 */
 
 }
@@ -412,7 +426,7 @@ static void MX_TIM4_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM4_Init 2 */
-
+  TIM4->CNT = 0x7FFF; // initial counter value
   /* USER CODE END TIM4_Init 2 */
 
 }
@@ -437,7 +451,7 @@ static void MX_TIM6_Init(void)
   htim6.Instance = TIM6;
   htim6.Init.Prescaler = 839;
   htim6.Init.CounterMode = TIM_COUNTERMODE_UP;
-  htim6.Init.Period = 1999;
+  htim6.Init.Period = 99;
   htim6.Init.AutoReloadPreload = TIM_AUTORELOAD_PRELOAD_DISABLE;
   if (HAL_TIM_Base_Init(&htim6) != HAL_OK)
   {
@@ -500,7 +514,7 @@ static void MX_TIM8_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN TIM8_Init 2 */
-
+  TIM8->CNT = 0x7FFF; // initial counter value
   /* USER CODE END TIM8_Init 2 */
 
 }
@@ -569,13 +583,18 @@ static void MX_DMA_Init(void)
   hdma_memtomem_dma2_stream0.Init.Mode = DMA_NORMAL;
   hdma_memtomem_dma2_stream0.Init.Priority = DMA_PRIORITY_LOW;
   hdma_memtomem_dma2_stream0.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
-  hdma_memtomem_dma2_stream0.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_FULL;
+  hdma_memtomem_dma2_stream0.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
   hdma_memtomem_dma2_stream0.Init.MemBurst = DMA_MBURST_SINGLE;
   hdma_memtomem_dma2_stream0.Init.PeriphBurst = DMA_PBURST_SINGLE;
   if (HAL_DMA_Init(&hdma_memtomem_dma2_stream0) != HAL_OK)
   {
     Error_Handler( );
   }
+
+  /* DMA interrupt init */
+  /* DMA2_Stream0_IRQn interrupt configuration */
+  HAL_NVIC_SetPriority(DMA2_Stream0_IRQn, 2, 0);
+  HAL_NVIC_EnableIRQ(DMA2_Stream0_IRQn);
 
 }
 
@@ -655,7 +674,6 @@ static void MX_FSMC_Init(void)
   /* USER CODE END FSMC_Init 0 */
 
   FSMC_NORSRAM_TimingTypeDef Timing = {0};
-//  FSMC_NORSRAM_TimingTypeDef ExtTiming = {0};
 
   /* USER CODE BEGIN FSMC_Init 1 */
 
@@ -681,21 +699,14 @@ static void MX_FSMC_Init(void)
   hsram1.Init.WriteBurst = FSMC_WRITE_BURST_DISABLE;
   hsram1.Init.PageSize = FSMC_PAGE_SIZE_NONE;
   /* Timing */
-  Timing.AddressSetupTime = 2;
-  Timing.AddressHoldTime = 2;
-  Timing.DataSetupTime = 2;
+  Timing.AddressSetupTime = 1;
+  Timing.AddressHoldTime = 1;
+  Timing.DataSetupTime = 1;
   Timing.BusTurnAroundDuration = 5;
   Timing.CLKDivision = 5;
-  Timing.DataLatency = 2;
+  Timing.DataLatency = 9;
   Timing.AccessMode = FSMC_ACCESS_MODE_A;
   /* ExtTiming */
-//  ExtTiming.AddressSetupTime = 2;
-//  ExtTiming.AddressHoldTime = 15;
-//  ExtTiming.DataSetupTime = 3;
-//  ExtTiming.BusTurnAroundDuration = 3;
-//  ExtTiming.CLKDivision = 16;
-//  ExtTiming.DataLatency = 17;
-//  ExtTiming.AccessMode = FSMC_ACCESS_MODE_A;
 
   if (HAL_SRAM_Init(&hsram1, &Timing, NULL) != HAL_OK)
   {
@@ -708,7 +719,18 @@ static void MX_FSMC_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-
+/**
+  * @brief  Period elapsed callback in non-blocking mode
+  * @param  htim TIM handle
+  * @retval None
+  */
+void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim)
+{
+	if(htim->Instance == TIM6)
+	{
+		is_scan_event = 1;
+	}
+}
 /* USER CODE END 4 */
 
 /**
