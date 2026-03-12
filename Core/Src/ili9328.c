@@ -101,7 +101,7 @@ static uint8_t Is_ili9328_Initialized = 0;
 static uint16_t ArrayRGB[320] = {0};
 static onDmaTransferCompleteCb callback = NULL;
 
-extern DMA_HandleTypeDef hdma_memtomem_dma2_stream0;
+extern DMA_HandleTypeDef hdma_memtomem_dma2_stream3;
 
 /**
   * @}
@@ -187,11 +187,10 @@ void ili9328_Init(void)
     /* I/D=00 (Horizontal : increment, Vertical : decrement) */
     /* AM=1 (address is updated in vertical writing direction) */
     ili9328_WriteReg(LCD_REG_3, 0x1018);
-//    ili9328_WriteReg(LCD_REG_3, 0x1030);
 
     // register DMA callbacks
-    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream0, HAL_DMA_XFER_CPLT_CB_ID, DMA_TransferComplete);
-    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream0, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferError);
+    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream3, HAL_DMA_XFER_CPLT_CB_ID, DMA_TransferComplete);
+    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream3, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferError);
   }
   
   /* Set the Cursor */ 
@@ -292,7 +291,7 @@ uint16_t ili9328_ReadID(void)
 void ili9328_SetCursor(uint16_t Xpos, uint16_t Ypos)
 {
   ili9328_WriteReg(LCD_REG_32, Ypos);
-  ili9328_WriteReg(LCD_REG_33, (ILI9328_LCD_PIXEL_WIDTH - 1 - Xpos));
+  ili9328_WriteReg(LCD_REG_33, (/*ILI9328_LCD_PIXEL_WIDTH - 1 - */Xpos));
 }
 
 /**
@@ -367,11 +366,16 @@ void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint1
 	// set display window
 	ili9328_SetDisplayWindow(x1, y1, width, height);
 
+	/* Set Cursor */
+	ili9328_SetCursor(x1, y1-1);
+
 	/* Prepare to write GRAM */
 	LCD_IO_WriteReg(LCD_REG_34);
 
+	LCD_IO_WriteMultipleData(fb, fb_len);
+
 	// write framebuffer GRAM data through the DMA
-	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream0, (uint32_t)fb, (uint32_t)LCD_DATA, width*height);
+//	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream3, (uint32_t)fb, (uint32_t)LCD_DATA, (uint32_t)width*height);
 }
 
 /**
@@ -390,9 +394,9 @@ void ili9328_SetDisplayWindow(uint16_t Xpos, uint16_t Ypos, uint16_t Width, uint
   ili9328_WriteReg(LCD_REG_81, (Ypos + Height - 1));
   
   /* Vertical GRAM Start Address */
-  ili9328_WriteReg(LCD_REG_82, (ILI9328_LCD_PIXEL_WIDTH - 1 - Xpos - Width));
+  ili9328_WriteReg(LCD_REG_82, (Xpos));
   /* Vertical GRAM End Address */
-  ili9328_WriteReg(LCD_REG_83, (ILI9328_LCD_PIXEL_WIDTH - Xpos - 1));
+  ili9328_WriteReg(LCD_REG_83, (Xpos + Width - 1));
 }
 
 /**
@@ -505,7 +509,7 @@ void ili9328_SetOnDmaTransferCompleteCb(onDmaTransferCompleteCb cb)
   */
 static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
 {
-	if(hdma->Instance == DMA2_Stream0)
+	if(hdma->Instance == DMA2_Stream3)
 	{
 		/* Inform the interface module that data transfer is complete*/
 		if(callback != NULL)
@@ -523,7 +527,7 @@ static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
   */
 static void DMA_TransferError(DMA_HandleTypeDef *hdma)
 {
-	if(hdma->Instance == DMA2_Stream0)
+	if(hdma->Instance == DMA2_Stream3)
 	{
 		// add error handler
 	}

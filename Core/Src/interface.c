@@ -21,8 +21,8 @@ static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, 
 static void on_dma_transfer_complete_handler(void);
 
 // LVGL frame buffers
-static uint16_t buf_1[14400];
-static uint16_t buf_2[14400];
+static uint16_t buf_1[9600];
+static uint16_t buf_2[9600];
 
 // LVGL interface objects
 static lv_display_t * disp;
@@ -54,18 +54,17 @@ void LCDIF_InitInterface(void)
 	lv_display_set_buffers(disp, buf_1, buf_2, sizeof(buf_1), LV_DISPLAY_RENDER_MODE_PARTIAL); /*Set an initialized buffer*/
 
 	// Change the active screen's background color
-	lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x858FA2), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0xFF0000), LV_PART_MAIN);
 	lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(0xffffff), LV_PART_MAIN);
 
 
 	// stimulus duration unit label
 	stim_dur_unit_lbl = lv_label_create(lv_screen_active());
 	lv_label_set_text(stim_dur_unit_lbl, "Test string");
-//	lv_obj_set_width(stim_dur_unit_lbl, 70);
 	lv_obj_set_style_text_font(stim_dur_unit_lbl, &lv_font_montserrat_20, 0);
 	lv_obj_set_style_text_color(stim_dur_unit_lbl, lv_color_hex(0x858FA2), 0);
 	lv_obj_set_style_text_align(stim_dur_unit_lbl, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_align(stim_dur_unit_lbl, LV_ALIGN_TOP_LEFT, 10, 10);
+	lv_obj_align(stim_dur_unit_lbl, LV_ALIGN_TOP_LEFT, 50, 20);
 }
 
 /**
@@ -151,8 +150,8 @@ static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, 
 	int height = area->y2 - area->y1 + 1;
 	int width = area->x2 - area->x1 + 1;
 
-	lv_draw_sw_rgb565_swap(color_p, width*height);
 	ili9328_WriteGRAM(area->x1, area->y1, area->x2, area->y2, (uint16_t*)color_p, width*height);
+	lv_display_flush_ready(disp);
 }
 
 /**

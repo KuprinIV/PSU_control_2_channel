@@ -2,7 +2,7 @@
 Dma.MEMTOMEM.0.Direction=DMA_MEMORY_TO_MEMORY
 Dma.MEMTOMEM.0.FIFOMode=DMA_FIFOMODE_ENABLE
 Dma.MEMTOMEM.0.FIFOThreshold=DMA_FIFO_THRESHOLD_1QUARTERFULL
-Dma.MEMTOMEM.0.Instance=DMA2_Stream0
+Dma.MEMTOMEM.0.Instance=DMA2_Stream3
 Dma.MEMTOMEM.0.MemBurst=DMA_MBURST_SINGLE
 Dma.MEMTOMEM.0.MemDataAlignment=DMA_MDATAALIGN_HALFWORD
 Dma.MEMTOMEM.0.MemInc=DMA_MINC_DISABLE
@@ -96,7 +96,7 @@ Mcu.UserName=STM32F405VGTx
 MxCube.Version=6.4.0
 MxDb.Version=DB.6.0.40
 NVIC.BusFault_IRQn=true\:0\:0\:false\:false\:true\:false\:false
-NVIC.DMA2_Stream0_IRQn=true\:2\:0\:true\:false\:true\:true\:true
+NVIC.DMA2_Stream3_IRQn=true\:0\:0\:false\:false\:true\:true\:true
 NVIC.DebugMonitor_IRQn=true\:0\:0\:false\:false\:true\:false\:false
 NVIC.ForceEnableDMAVector=true
 NVIC.HardFault_IRQn=true\:0\:0\:false\:false\:true\:false\:false
