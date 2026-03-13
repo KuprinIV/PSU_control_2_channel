@@ -195,7 +195,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
   RCC_OscInitStruct.PLL.PLLM = 8;
-  RCC_OscInitStruct.PLL.PLLN = 168;
+  RCC_OscInitStruct.PLL.PLLN = 336;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -208,10 +208,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
@@ -582,10 +582,10 @@ static void MX_DMA_Init(void)
   hdma_memtomem_dma2_stream3.Init.PeriphDataAlignment = DMA_PDATAALIGN_HALFWORD;
   hdma_memtomem_dma2_stream3.Init.MemDataAlignment = DMA_MDATAALIGN_HALFWORD;
   hdma_memtomem_dma2_stream3.Init.Mode = DMA_NORMAL;
-  hdma_memtomem_dma2_stream3.Init.Priority = DMA_PRIORITY_VERY_HIGH;
-  hdma_memtomem_dma2_stream3.Init.FIFOMode = DMA_FIFOMODE_DISABLE;
+  hdma_memtomem_dma2_stream3.Init.Priority = DMA_PRIORITY_LOW;
+  hdma_memtomem_dma2_stream3.Init.FIFOMode = DMA_FIFOMODE_ENABLE;
   hdma_memtomem_dma2_stream3.Init.FIFOThreshold = DMA_FIFO_THRESHOLD_1QUARTERFULL;
-  hdma_memtomem_dma2_stream3.Init.MemBurst = DMA_PBURST_SINGLE;
+  hdma_memtomem_dma2_stream3.Init.MemBurst = DMA_MBURST_SINGLE;
   hdma_memtomem_dma2_stream3.Init.PeriphBurst = DMA_PBURST_SINGLE;
   if (HAL_DMA_Init(&hdma_memtomem_dma2_stream3) != HAL_OK)
   {
@@ -700,9 +700,9 @@ static void MX_FSMC_Init(void)
   hsram1.Init.WriteBurst = FSMC_WRITE_BURST_DISABLE;
   hsram1.Init.PageSize = FSMC_PAGE_SIZE_NONE;
   /* Timing */
-  Timing.AddressSetupTime = 2;
-  Timing.AddressHoldTime = 1;
-  Timing.DataSetupTime = 2;
+  Timing.AddressSetupTime = 4;
+  Timing.AddressHoldTime = 2;
+  Timing.DataSetupTime = 4;
   Timing.BusTurnAroundDuration = 0;
   Timing.CLKDivision = 0;
   Timing.DataLatency = 0;

@@ -7,6 +7,7 @@
 #include "interface.h"
 #include "lvgl.h"
 #include "ili9328.h"
+#include "main.h"
 #include <string.h>
 
 // misc functions
@@ -64,7 +65,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_style_text_font(stim_dur_unit_lbl, &lv_font_montserrat_20, 0);
 	lv_obj_set_style_text_color(stim_dur_unit_lbl, lv_color_hex(0x858FA2), 0);
 	lv_obj_set_style_text_align(stim_dur_unit_lbl, LV_TEXT_ALIGN_CENTER, 0);
-	lv_obj_align(stim_dur_unit_lbl, LV_ALIGN_TOP_LEFT, 50, 20);
+	lv_obj_align(stim_dur_unit_lbl, LV_ALIGN_TOP_LEFT, 95, 100);
 }
 
 /**
