@@ -58,7 +58,6 @@ SRAM_HandleTypeDef hsram1;
 
 /* USER CODE BEGIN PV */
 volatile uint8_t is_scan_event = 0;
-uint16_t test[676] = {0xF800};
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,13 +142,6 @@ int main(void)
 
   // start scanning timer
   HAL_TIM_Base_Start_IT(&htim6);
-
-  // test
-//  for(uint32_t i = 0; i < 240; i++)
-//  {
-//	  ili9328_DrawHLine(LCD_COLOR_BLUE, 70, 100, 50);
-//  }
-//  ili9328_WriteGRAM(250, 210, 275, 235, test, 676);
 
   /* USER CODE END 2 */
 

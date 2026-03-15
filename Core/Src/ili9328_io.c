@@ -24,7 +24,7 @@ void LCD_IO_Init(void)
   */
 void LCD_IO_WriteReg(uint8_t Reg)
 {
-	*(uint16_t*)(LCD_REG) = Reg;
+	*(volatile uint16_t*)(LCD_REG) = Reg;
 }
 
 /**
@@ -34,7 +34,7 @@ void LCD_IO_WriteReg(uint8_t Reg)
   */
 void LCD_IO_WriteData(uint16_t RegValue)
 {
-	*(uint16_t*)(LCD_DATA) = RegValue;
+	*(volatile uint16_t*)(LCD_DATA) = RegValue;
 }
 
 /**
@@ -45,9 +45,9 @@ void LCD_IO_WriteData(uint16_t RegValue)
   */
 void LCD_IO_WriteMultipleData(uint16_t* data, uint32_t size)
 {
-	for(uint32_t i = 0; i < size; i++)
+	for(volatile uint32_t i = 0; i < size; i++)
 	{
-		*(uint16_t*)(LCD_DATA) = data[i];
+		*(volatile uint16_t*)(LCD_DATA) = data[i];
 	}
 }
 
@@ -58,7 +58,7 @@ void LCD_IO_WriteMultipleData(uint16_t* data, uint32_t size)
   */
 uint16_t LCD_IO_ReadData(void)
 {
-	return *(uint16_t*)(LCD_DATA);
+	return *(volatile uint16_t*)(LCD_DATA);
 }
 
 /**

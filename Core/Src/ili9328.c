@@ -132,7 +132,7 @@ void ili9328_Init(void)
     Is_ili9328_Initialized = 1;
     /* Initialise ILI9328 low level bus layer --------------------------------*/
     LCD_IO_Init();
-    
+
     /* Start Initial Sequence ------------------------------------------------*/
     ili9328_WriteReg(LCD_REG_0, 0x0001); /* Start internal OSC. */
     ili9328_WriteReg(LCD_REG_1, 0x0100); /* Set SS and SM bit */
@@ -291,7 +291,7 @@ uint16_t ili9328_ReadID(void)
 void ili9328_SetCursor(uint16_t Xpos, uint16_t Ypos)
 {
   ili9328_WriteReg(LCD_REG_32, Ypos);
-  ili9328_WriteReg(LCD_REG_33, (/*ILI9328_LCD_PIXEL_WIDTH - 1 - */Xpos));
+  ili9328_WriteReg(LCD_REG_33, Xpos);
 }
 
 /**
@@ -367,7 +367,7 @@ void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint1
 	ili9328_SetDisplayWindow(x1, y1, width, height);
 
 	/* Set Cursor */
-	ili9328_SetCursor(x1, y1-1);
+	ili9328_SetCursor(x1-1, y1);
 
 	/* Prepare to write GRAM */
 	LCD_IO_WriteReg(LCD_REG_34);
