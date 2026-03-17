@@ -99,9 +99,6 @@ LCD_DrvTypeDef   ili9328_drv =
 
 static uint8_t Is_ili9328_Initialized = 0;
 static uint16_t ArrayRGB[320] = {0};
-static onDmaTransferCompleteCb callback = NULL;
-
-extern DMA_HandleTypeDef hdma_memtomem_dma2_stream3;
 
 /**
   * @}
@@ -110,8 +107,7 @@ extern DMA_HandleTypeDef hdma_memtomem_dma2_stream3;
 /** @defgroup ILI9328_Private_FunctionPrototypes
   * @{
   */
-static void DMA_TransferComplete(DMA_HandleTypeDef *hdma);
-static void DMA_TransferError(DMA_HandleTypeDef *hdma);
+
 /**
   * @}
   */ 
@@ -187,10 +183,6 @@ void ili9328_Init(void)
     /* I/D=00 (Horizontal : increment, Vertical : decrement) */
     /* AM=1 (address is updated in vertical writing direction) */
     ili9328_WriteReg(LCD_REG_3, 0x1018);
-
-    // register DMA callbacks
-    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream3, HAL_DMA_XFER_CPLT_CB_ID, DMA_TransferComplete);
-    HAL_DMA_RegisterCallback(&hdma_memtomem_dma2_stream3, HAL_DMA_XFER_ERROR_CB_ID, DMA_TransferError);
   }
   
   /* Set the Cursor */ 
@@ -371,11 +363,8 @@ void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint1
 
 	/* Prepare to write GRAM */
 	LCD_IO_WriteReg(LCD_REG_34);
-
 	LCD_IO_WriteMultipleData(fb, fb_len);
 
-	// write framebuffer GRAM data through the DMA
-//	HAL_DMA_Start_IT(&hdma_memtomem_dma2_stream3, (uint32_t)fb, (uint32_t)LCD_DATA, (uint32_t)width*height);
 }
 
 /**
@@ -489,48 +478,6 @@ void ili9328_DrawBitmap(uint16_t Xpos, uint16_t Ypos, uint8_t *pbmp)
   /* I/D = 01 (Horizontal : increment, Vertical : decrement) */
   /* AM = 1 (address is updated in vertical writing direction) */
   ili9328_WriteReg(LCD_REG_3, 0x1018);
-}
-
-/**
- * @brief Set on DMA transfer complete callback
- * @param: cb - callback function pointer
- * @return: None
- */
-void ili9328_SetOnDmaTransferCompleteCb(onDmaTransferCompleteCb cb)
-{
-	callback = cb;
-}
-
-/**
-  * @brief  DMA MemToMem Transfer completed callback.
-  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
-  *               the configuration information for DMA module.
-  * @retval None
-  */
-static void DMA_TransferComplete(DMA_HandleTypeDef *hdma)
-{
-	if(hdma->Instance == DMA2_Stream3)
-	{
-		/* Inform the interface module that data transfer is complete*/
-		if(callback != NULL)
-		{
-			callback();
-		}
-	}
-}
-
-/**
-  * @brief  DMA MemToMem Transfer error callback.
-  * @param  hdma pointer to a DMA_HandleTypeDef structure that contains
-  *               the configuration information for DMA module.
-  * @retval None
-  */
-static void DMA_TransferError(DMA_HandleTypeDef *hdma)
-{
-	if(hdma->Instance == DMA2_Stream3)
-	{
-		// add error handler
-	}
 }
 
 /**

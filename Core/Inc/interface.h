@@ -11,7 +11,7 @@
 //#include "board_controls.h"
 #include "ili9328.h"
 
-#define LVGL_TIMER_DIV			4
+#define LVGL_TIMER_DIV			9
 #define CH1_ITEMS_COLOR			0xFFAF20
 #define CH2_ITEMS_COLOR			0x00FFFF
 #define TEXT_COLOR				0xFFFFFF

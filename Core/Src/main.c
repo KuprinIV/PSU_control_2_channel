@@ -23,6 +23,7 @@
 /* USER CODE BEGIN Includes */
 #include "ili9328.h"
 #include "interface.h"
+#include "psu_channel_ctrl.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -140,6 +141,9 @@ int main(void)
   // init LVGL interface
   LCDIF_InitInterface();
 
+  // init PSU control
+  PSU_controlInit();
+
   // start scanning timer
   HAL_TIM_Base_Start_IT(&htim6);
 
@@ -161,6 +165,9 @@ int main(void)
 
 		  // update LVGL timer
 		  LCDIF_UpdateLvglTimer();
+
+		  // PSU control tick handler
+		  PSU_updateTickHandler();
 	  }
   }
   /* USER CODE END 3 */

@@ -8,18 +8,18 @@
 #include "lvgl.h"
 #include "ili9328.h"
 #include "main.h"
+#include "psu_channel_ctrl.h"
 #include <string.h>
 
 // misc functions
 
 
 // UI control functions
-//static void updateEncoderState(void);
 static void updateUI(void);
 
 // callback functions
 static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p);
-static void on_dma_transfer_complete_handler(void);
+static void on_psu_calibration_status_changed(PSU_CalibrationStatus* psu_status);
 
 // LVGL frame buffers
 static uint16_t buf_1[9600];
@@ -56,8 +56,8 @@ static lv_obj_t* ch2_btn_label;
  */
 void LCDIF_InitInterface(void)
 {
-	// init DMA callbacks
-	ili9328_SetOnDmaTransferCompleteCb(on_dma_transfer_complete_handler);
+	// init callbacks
+	PSU_setOnPsuCalibrationStatusUpdatedCb(on_psu_calibration_status_changed);
 
 	//Initialize LVGL UI library
 	lv_init();
@@ -200,7 +200,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_volt_ch1_title_lbl, LV_ALIGN_TOP_LEFT, 8, 140);
 
 	set_volt_ch1_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_volt_ch1_lbl, "30.00 V");
+	lv_label_set_text(set_volt_ch1_lbl, "0.00 V");
 	lv_obj_set_style_text_font(set_volt_ch1_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_volt_ch1_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -233,7 +233,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_volt_ch2_title_lbl, LV_ALIGN_TOP_LEFT, 168, 140);
 
 	set_volt_ch2_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_volt_ch2_lbl, "30.00 V");
+	lv_label_set_text(set_volt_ch2_lbl, "0.00 V");
 	lv_obj_set_style_text_font(set_volt_ch2_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_volt_ch2_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -369,18 +369,6 @@ void LCDIF_UpdateLvglTick(void)
 
 
 /********************************************************* UI control functions *************************************************************/
-
-/**
- * @brief Update selected screen object if encoder state is changed
- * @param: enc - encoder data object
- * @return: None
- */
-//void updateEncoderState(void)
-//{
-//
-//}
-
-
 /**
  * @brief Update PSU control screen
  * @param: None
@@ -410,12 +398,11 @@ static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, 
 }
 
 /**
- * @brief Framebuffer DMA transfer complete callback
- * @param: None
+ * @brief PSU calibration status changed callback
+ * @param: psu_status - data structure pointer with PSU calibration status data
  * @return: None
  */
-static void on_dma_transfer_complete_handler(void)
+static void on_psu_calibration_status_changed(PSU_CalibrationStatus* psu_status)
 {
-	/* Inform the graphics library that you are ready with the flushing*/
-	lv_display_flush_ready(disp);
+
 }
