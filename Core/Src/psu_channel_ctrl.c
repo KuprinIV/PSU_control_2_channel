@@ -12,15 +12,19 @@
 
 static void PSU_readCalibrationData(ChannelCalibrationData* ch1_calibration, ChannelCalibrationData* ch2_calibration);
 static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationData* ch_calibration);
-static void getIndexRange(uint16_t value, uint16_t* array, uint16_t size, uint16_t* idx_min, uint16_t* idx_max);
+static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* array, uint16_t size, uint16_t step, uint16_t* value_out);
+static void checkValueLimits(uint16_t* val, uint16_t min, uint16_t max);
 
-static ChannelCtrl psu_ch1_ctrl = {0, 0, 0, 0xFFFF, 0xFFFF}, psu_ch2_ctrl = {0, 0, 0, 0xFFFF, 0xFFFF};
+static ChannelCtrl psu_ch1_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF}, psu_ch2_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF};
 static ChannelCtrl* psu_channels_ctrl[2] = {&psu_ch1_ctrl, &psu_ch2_ctrl};
 
 static ChannelCalibrationData psu_ch1_calibration, psu_ch2_calibration;
 static ChannelCalibrationData* psu_calibration_data[2] = {&psu_ch1_calibration, &psu_ch2_calibration};
 
-static onPsuCalibrationStatusUpdatedCb callback = NULL;
+static PSU_MeasuredParams psu_ch1_meas_data = {0, 0, 0}, psu_ch2_meas_data = {0, 0, 0};
+
+static PSU_CalibrationStatus psu_ch1_status = {0, 0, 0, 0}, psu_ch2_status = {0, 0, 0, 0};
+static PSU_CalibrationStatus* psu_status[2] = {&psu_ch1_status, &psu_ch2_status};
 
 static PSU_GPIO_CtrlPin psu_ch1_en_pin = {DC_EN_CH1_GPIO_Port, DC_EN_CH1_Pin}, psu_ch2_en_pin = {DC_EN_CH2_GPIO_Port, DC_EN_CH2_Pin};
 static PSU_GPIO_CtrlPin* psu_en_gpio_pins[2] = {&psu_ch1_en_pin, &psu_ch2_en_pin};
@@ -33,9 +37,14 @@ I2C_HandleTypeDef* psu_control_i2cs[2] = {&hi2c2, &hi2c1};
 
 static uint8_t is_calibration_mode = 0;
 static PSU_Calibration psu_calibration_ctrl;
-static PSU_CalibrationStatus psu_status = {PSU_CHANNEL_1, 0, 0, 0, 0};
+
 static uint16_t voltage_cal_measured_data[CALIBRATION_MEAS_DATA_AVGS] = {0};
 static int16_t current_cal_measured_data[CALIBRATION_MEAS_DATA_AVGS] = {0};
+static uint16_t voltageSetValSteps[3] = {VOLTAGE_SET_STEP_FINE, VOLTAGE_SET_STEP_COARSE, 1};
+static int16_t currentSetValSteps[3] = {CURRENT_SET_STEP_FINE, CURRENT_SET_STEP_COARSE, 1};
+
+PSU_UI_ChannelData channel1_ui_data = {0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status}, channel2_ui_data = {0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status};
+static PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_ui_data};
 
 /**
  * @brief PSU control initialize
@@ -49,22 +58,38 @@ void PSU_controlInit(void)
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_1], VOLTAGE_DAC_ADDR))
 	{
 		psu_ch1_ctrl.voltageDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_1], VOLTAGE_DAC_ADDR, DAC_EEPROM_VALUE);
+		if(!restoreValueFromCalibrationData(psu_ch1_ctrl.voltageDacVal, psu_ch1_calibration.voltageDacCalibrationNodes, psu_ch1_calibration.voltageStepsNum, psu_ch1_calibration.voltageDacStep, &psu_ch1_ctrl.voltageSetVal))
+		{
+			psu_ch1_ctrl.voltageSetVal = psu_ch1_ctrl.voltageDacVal;
+		}
 	}
 
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_1], CURRENT_DAC_ADDR))
 	{
 		psu_ch1_ctrl.currentDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_1], CURRENT_DAC_ADDR, DAC_EEPROM_VALUE);
+		if(!restoreValueFromCalibrationData(psu_ch1_ctrl.currentDacVal, psu_ch1_calibration.currentDacCalibrationNodes, psu_ch1_calibration.currentStepsNum, psu_ch1_calibration.currentDacStep, &psu_ch1_ctrl.currentSetVal))
+		{
+			psu_ch1_ctrl.currentSetVal = psu_ch1_ctrl.currentDacVal;
+		}
 	}
 
 	// channel 2
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_2], VOLTAGE_DAC_ADDR))
 	{
 		psu_ch2_ctrl.voltageDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_2], VOLTAGE_DAC_ADDR, DAC_EEPROM_VALUE);
+		if(!restoreValueFromCalibrationData(psu_ch2_ctrl.voltageDacVal, psu_ch2_calibration.voltageDacCalibrationNodes, psu_ch2_calibration.voltageStepsNum, psu_ch2_calibration.voltageDacStep, &psu_ch2_ctrl.voltageSetVal))
+		{
+			psu_ch2_ctrl.voltageSetVal = psu_ch2_ctrl.voltageDacVal;
+		}
 	}
 
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_2], CURRENT_DAC_ADDR))
 	{
 		psu_ch2_ctrl.currentDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_2], CURRENT_DAC_ADDR, DAC_EEPROM_VALUE);
+		if(!restoreValueFromCalibrationData(psu_ch2_ctrl.currentDacVal, psu_ch2_calibration.currentDacCalibrationNodes, psu_ch2_calibration.currentStepsNum, psu_ch2_calibration.currentDacStep, &psu_ch2_ctrl.currentSetVal))
+		{
+			psu_ch2_ctrl.currentSetVal = psu_ch2_ctrl.currentDacVal;
+		}
 	}
 
 	// init INA226 ICs
@@ -76,16 +101,6 @@ void PSU_controlInit(void)
 
 	// read calibration data
 	PSU_readCalibrationData(&psu_ch1_calibration, &psu_ch2_calibration);
-}
-
-/**
- * @brief Set on PSU status updated callback
- * @param: cb - callback function pointer
- * @return: None
- */
-void PSU_setOnPsuCalibrationStatusUpdatedCb(onPsuCalibrationStatusUpdatedCb cb)
-{
-	callback = cb;
 }
 
 /**
@@ -256,43 +271,69 @@ static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationDat
 
 /**
  * @brief Get the range of array element indices within which the value lies
- * @param value - value to check
+ * @param value_in - value to check
  * @param array - data array pointer
  * @param size - array size
- * @param idx_min - returned index of lower array element value pointer
- * @param idx_max - returned index of upper array element value pointer
- * @retval None
+ * @param value_out - output value pointer
+ * @retval 0 - output value isn't found, 1 - output value is found
  */
-static void getIndexRange(uint16_t value, uint16_t* array, uint16_t size, uint16_t* idx_min, uint16_t* idx_max)
+static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* array, uint16_t size, uint16_t step, uint16_t* value_out)
 {
+	uint16_t idx_min = 0, idx_max = 0;
+	uint16_t node_min = 0, node_max = 0, nodes_range = 0, reminder = 0;
+
 	// check pointers to null
-	if((array == NULL) || (idx_min == NULL) || (idx_max == NULL))
+	if(array == NULL || value_out == NULL)
 	{
-		return;
+		return 0;
 	}
 
-	// init indices value
-	*idx_min = 0xFFFF;
-	*idx_max = 0xFFFF;
-
-
-	if(value >= array[size-1])
+	// check is input value in array values range
+	if(value_in >= array[size-1])
 	{
-		*idx_min = size-2;
-		*idx_max = size-1;
+		idx_min = size-2;
+		idx_max = size-1;
 	}
 	else
 	{
 		// try to find indices range
 		for(uint16_t i = 0; i < size-1; i++)
 		{
-			if(value >= array[i] && value < array[i+1])
+			if(value_in >= array[i] && value_in < array[i+1])
 			{
-				*idx_min = i;
-				*idx_max = i + 1;
-				return;
+				idx_min = i;
+				idx_max = i + 1;
+				break;
 			}
 		}
+	}
+
+	// calculate output value
+	node_max = array[idx_max];
+	node_min = array[idx_min];
+	nodes_range = node_max - node_min;
+	reminder = value_in - node_min;
+	*value_out = step*idx_min + (uint16_t)((uint32_t)reminder*step/nodes_range);
+
+	return 1;
+}
+
+/**
+  * @brief  Check is set values in limits. if not, set limit value
+  * @param  val - set value pointer
+  * @param	min - minimum value limit
+  * @param	max - maximum value limit
+  * @retval None
+  */
+static void checkValueLimits(uint16_t* val, uint16_t min, uint16_t max)
+{
+	if(*val < min || *val > 32767) // account, that val is unsigned
+	{
+		*val = min;
+	}
+	else if(*val > max)
+	{
+		*val = max;
 	}
 }
 
@@ -351,6 +392,7 @@ void PSU_setVoltage(PSU_Channel ch, uint16_t voltage_10mv)
 
 	// write DAC value
 	PSU_setRawVoltageDac(ch, voltage_dac_value);
+
 }
 
 /**
@@ -417,7 +459,7 @@ void PSU_setRawVoltageDac(PSU_Channel ch, uint16_t voltage_dac_code)
 	psu_channels_ctrl[ch]->voltageDacVal = voltage_dac_code;
 
 	// update control data
-	if(!is_calibration_mode)
+	if(!channels_ui_data[ch]->is_calibration)
 	{
 		psu_channels_ctrl[ch]->voltageDacSaveValCntr = 0;
 	}
@@ -448,7 +490,7 @@ void PSU_setRawCurrentDac(PSU_Channel ch, uint16_t current_dac_code)
 	psu_channels_ctrl[ch]->currentDacVal = current_dac_code;
 
 	// update control data
-	if(!is_calibration_mode)
+	if(!channels_ui_data[ch]->is_calibration)
 	{
 		psu_channels_ctrl[ch]->currentDacSaveValCntr = 0;
 	}
@@ -497,25 +539,12 @@ void PSU_measureOutputParameters(PSU_Channel ch, PSU_MeasuredParams* psu_mp)
 	int32_t curr_meas_sum = 0;
 
 	uint16_t volt_meas_cal_step = 0;
-	uint16_t volt_idx_min = 0;
-	uint16_t volt_idx_max = 0;
-	uint16_t volt_node_max = 0;
-	uint16_t volt_node_min = 0;
-	uint16_t volt_nodes_range = 0;
-	uint16_t volt_reminder = 0;
-
 	uint16_t curr_meas_cal_step = 0;
-	uint16_t curr_idx_min = 0;
-	uint16_t curr_idx_max = 0;
-	int16_t curr_node_max = 0;
-	int16_t curr_node_min = 0;
-	int16_t curr_nodes_range = 0;
-	int16_t curr_reminder = 0;
 
 	// get channel measured parameters
 	INA226_ReadData(psu_control_i2cs[ch], &ina226_data);
 
-	if(is_calibration_mode && psu_calibration_ctrl.channel == ch)
+	if(channels_ui_data[ch]->is_calibration)
 	{
 		psu_mp->voltage_mv = ina226_data.voltage_mv;
 		psu_mp->current_ma = ina226_data.current_ma;
@@ -587,17 +616,7 @@ void PSU_measureOutputParameters(PSU_Channel ch, PSU_MeasuredParams* psu_mp)
 	// to the measured voltage
 		volt_meas_cal_step = psu_calibration_data[ch]->voltageMeasStep;
 
-		getIndexRange(ina226_data.voltage_mv, psu_calibration_data[ch]->voltageMeasCalibrationNodes, psu_calibration_data[ch]->voltageStepsNum, &volt_idx_min, &volt_idx_max);
-		// check are indices correct
-		if(volt_idx_min != 0xFFFF && volt_idx_max != 0xFFFF)
-		{
-			volt_node_max = psu_calibration_data[ch]->voltageMeasCalibrationNodes[volt_idx_max];
-			volt_node_min = psu_calibration_data[ch]->voltageMeasCalibrationNodes[volt_idx_min];
-			volt_nodes_range = volt_node_max - volt_node_min;
-			volt_reminder = ina226_data.voltage_mv - volt_node_min;
-			psu_mp->voltage_mv = psu_calibration_data[ch]->voltageMeasStep*volt_idx_min + (uint16_t)((uint32_t)volt_reminder*volt_meas_cal_step/volt_nodes_range);
-		}
-		else
+		if(!restoreValueFromCalibrationData(ina226_data.voltage_mv, psu_calibration_data[ch]->voltageMeasCalibrationNodes, psu_calibration_data[ch]->voltageStepsNum, volt_meas_cal_step, &psu_mp->voltage_mv))
 		{
 			psu_mp->voltage_mv = ina226_data.voltage_mv;
 		}
@@ -605,17 +624,7 @@ void PSU_measureOutputParameters(PSU_Channel ch, PSU_MeasuredParams* psu_mp)
 	// to the measured current
 		curr_meas_cal_step = psu_calibration_data[ch]->currentMeasStep;
 
-		getIndexRange(ina226_data.current_ma, (uint16_t*)psu_calibration_data[ch]->currentMeasCalibrationNodes, psu_calibration_data[ch]->currentStepsNum, &curr_idx_min, &curr_idx_max);
-		// check are indices correct
-		if(curr_idx_min != 0xFFFF && curr_idx_max != 0xFFFF) // measured current value is in range of calibration points
-		{
-			curr_node_max = psu_calibration_data[ch]->currentMeasCalibrationNodes[curr_idx_max];
-			curr_node_min = psu_calibration_data[ch]->currentMeasCalibrationNodes[curr_idx_min];
-			curr_nodes_range = curr_node_max - curr_node_min;
-			curr_reminder = ina226_data.current_ma - curr_node_min;
-			psu_mp->current_ma = psu_calibration_data[ch]->currentMeasStep*curr_idx_min + (int16_t)((int32_t)curr_reminder*curr_meas_cal_step/curr_nodes_range);
-		}
-		else
+		if(!restoreValueFromCalibrationData(ina226_data.current_ma, (uint16_t*)psu_calibration_data[ch]->currentMeasCalibrationNodes, psu_calibration_data[ch]->currentStepsNum, curr_meas_cal_step, (uint16_t*)&psu_mp->current_ma))
 		{
 			psu_mp->current_ma = ina226_data.current_ma;
 		}
@@ -634,6 +643,7 @@ void PSU_measureOutputParameters(PSU_Channel ch, PSU_MeasuredParams* psu_mp)
 void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_CalibrationType cal_type)
 {
 	is_calibration_mode = is_enabled;
+	channels_ui_data[ch]->is_calibration = is_enabled; // send status to the UI
 
 	if(is_enabled)
 	{
@@ -690,6 +700,22 @@ void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_Calibration
 }
 
 /**
+ * @brief Go the previous calibration step during calibration process
+ * @param None
+ * @retval None
+ */
+void PSU_goToThePrevCalibrationStep(void)
+{
+	if(is_calibration_mode)
+	{
+		if(psu_calibration_ctrl.currentStep > 0)
+		{
+			psu_calibration_ctrl.currentStep--;
+		}
+	}
+}
+
+/**
  * @brief Go the next calibration step during calibration process
  * @param None
  * @retval None
@@ -721,69 +747,334 @@ void PSU_goToTheNextCalibrationStep(void)
 }
 
 /**
+ * @brief PSU handle controls state changing
+ * @param controls - data structure pointer with PSU controls state
+ * @retval None
+ */
+void PSU_handleControls(ControlsState* controls)
+{
+// channel 1
+	if(channels_ui_data[PSU_CHANNEL_1]->is_calibration)
+	{
+		// voltage set encoder button press is go to the next step
+		if(controls->voltageSetEnc[0].is_btn_state_changed)
+		{
+			if(controls->voltageSetEnc[0].btn_state == Pressed)
+			{
+				if(psu_calibration_ctrl.is_finished)
+				{
+					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+					{
+						PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
+					}
+					else
+					{
+						PSU_calibrationModeCtrl(PSU_CHANNEL_1, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
+					}
+				}
+				else
+				{
+					PSU_goToTheNextCalibrationStep();
+				}
+			}
+		}
+
+		// current set encoder button press is go to the previous step
+		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
+		{
+			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
+			{
+				PSU_goToThePrevCalibrationStep();
+			}
+			else if(controls->currentLimitSetEnc[0].btn_state == LongPressed)
+			{
+				if(!psu_calibration_ctrl.is_finished)
+				{
+					PSU_calibrationModeCtrl(PSU_CHANNEL_1, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
+				}
+			}
+		}
+
+		// update calibration parameter value
+		if(controls->voltageSetEnc[0].is_enc_state_changed)
+		{
+			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+			{
+				psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal += controls->voltageSetEnc[0].counter_offset;
+				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
+				PSU_setRawVoltageDac(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal);
+			}
+			else
+			{
+				psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal += controls->voltageSetEnc[0].counter_offset;
+				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal, 0, CURRENT_DAC_MAX);
+				PSU_setRawCurrentDac(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal);
+			}
+		}
+	}
+	else
+	{
+	// channel 1 set
+		// voltage
+		// get step value changing
+		if(controls->voltageSetEnc[0].is_btn_state_changed)
+		{
+			if(controls->voltageSetEnc[0].btn_state == Pressed)
+			{
+				psu_ch1_ctrl.voltageSetStepIdx = (psu_ch1_ctrl.voltageSetStepIdx+1)&0x01;
+			}
+			else if(controls->voltageSetEnc[0].btn_state == LongPressed)
+			{
+				psu_ch1_ctrl.voltageSetStepIdx = 2;
+			}
+
+		}
+
+		// update voltage set value
+		if(controls->voltageSetEnc[0].is_enc_state_changed)
+		{
+			psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal += controls->voltageSetEnc[0].counter_offset*voltageSetValSteps[psu_ch1_ctrl.voltageSetStepIdx];
+			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
+			PSU_setVoltage(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal);
+		}
+
+		// current
+		// get step value changing
+		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
+		{
+			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
+			{
+				psu_ch1_ctrl.currentSetStepIdx = (psu_ch1_ctrl.currentSetStepIdx+1)&0x01;
+			}
+			else if(controls->currentLimitSetEnc[0].btn_state == LongPressed)
+			{
+				psu_ch1_ctrl.currentSetStepIdx = 2;
+			}
+		}
+
+		// update current set value
+		if(controls->currentLimitSetEnc[0].is_enc_state_changed)
+		{
+			psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal += controls->currentLimitSetEnc[0].counter_offset*currentSetValSteps[psu_ch1_ctrl.currentSetStepIdx];
+			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal, 0, CURRENT_DAC_MAX);
+			PSU_setCurrentLimit(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal);
+		}
+
+		// start channel calibration
+		if(controls->voltageSetEnc[0].btn_state == Pressed && controls->currentLimitSetEnc[0].btn_state == Pressed)
+		{
+			if(!channels_ui_data[PSU_CHANNEL_1]->is_calibration)
+			{
+//				PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_VOLTAGE_CAL); // start channel calibration
+			}
+		}
+	}
+
+	// update channel 1 enable state
+	if(controls->psuEnableCtrlBtns[0].is_state_changed)
+	{
+		if(controls->psuEnableCtrlBtns[0].btn_state == Pressed)
+		{
+			PSU_enableChannelCtrl(PSU_CHANNEL_1, 1);
+		}
+		else
+		{
+			PSU_enableChannelCtrl(PSU_CHANNEL_1, 0);
+		}
+	}
+
+// channel 2
+	if(channels_ui_data[PSU_CHANNEL_2]->is_calibration)
+	{
+		// voltage set encoder button press is go to the next step
+		if(controls->voltageSetEnc[1].is_btn_state_changed)
+		{
+			if(controls->voltageSetEnc[1].btn_state == Pressed)
+			{
+				if(psu_calibration_ctrl.is_finished)
+				{
+					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+					{
+						PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
+					}
+					else
+					{
+						PSU_calibrationModeCtrl(PSU_CHANNEL_2, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
+					}
+				}
+				else
+				{
+					PSU_goToTheNextCalibrationStep();
+				}
+			}
+		}
+
+		// current set encoder button press is go to the previous step
+		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
+		{
+			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
+			{
+				PSU_goToThePrevCalibrationStep();
+			}
+			else if(controls->currentLimitSetEnc[1].btn_state == LongPressed)
+			{
+				if(!psu_calibration_ctrl.is_finished)
+				{
+					PSU_calibrationModeCtrl(PSU_CHANNEL_2, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
+				}
+			}
+		}
+
+		// update calibration parameter value
+		if(controls->voltageSetEnc[1].is_enc_state_changed)
+		{
+			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+			{
+				psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal += controls->voltageSetEnc[1].counter_offset;
+				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
+				PSU_setRawVoltageDac(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal);
+			}
+			else
+			{
+				psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal += controls->voltageSetEnc[1].counter_offset;
+				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal, 0, CURRENT_DAC_MAX);
+				PSU_setRawCurrentDac(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal);
+			}
+		}
+	}
+	else
+	{
+	// channel 2 set
+		// voltage
+		// get step value changing
+		if(controls->voltageSetEnc[1].is_btn_state_changed)
+		{
+			if(controls->voltageSetEnc[1].btn_state == Pressed)
+			{
+				psu_ch2_ctrl.voltageSetStepIdx = (psu_ch2_ctrl.voltageSetStepIdx+1)&0x01;
+			}
+			else if(controls->voltageSetEnc[1].btn_state == LongPressed)
+			{
+				psu_ch2_ctrl.voltageSetStepIdx = 2;
+			}
+
+		}
+
+		// update voltage set value
+		if(controls->voltageSetEnc[1].is_enc_state_changed)
+		{
+			psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal += controls->voltageSetEnc[1].counter_offset*voltageSetValSteps[psu_ch2_ctrl.voltageSetStepIdx];
+			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
+			PSU_setVoltage(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal);
+		}
+
+		// current
+		// get step value changing
+		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
+		{
+			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
+			{
+				psu_ch2_ctrl.currentSetStepIdx = (psu_ch2_ctrl.currentSetStepIdx+1)&0x01;
+			}
+			else if(controls->currentLimitSetEnc[1].btn_state == LongPressed)
+			{
+				psu_ch2_ctrl.currentSetStepIdx = 2;
+			}
+		}
+
+		// update current set value
+		if(controls->currentLimitSetEnc[1].is_enc_state_changed)
+		{
+			psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal += controls->currentLimitSetEnc[1].counter_offset*currentSetValSteps[psu_ch2_ctrl.currentSetStepIdx];
+			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal, 0, CURRENT_DAC_MAX);
+			PSU_setCurrentLimit(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal);
+		}
+
+		// start channel calibration
+		if(controls->voltageSetEnc[1].btn_state == Pressed && controls->currentLimitSetEnc[1].btn_state == Pressed)
+		{
+			if(!channels_ui_data[PSU_CHANNEL_2]->is_calibration)
+			{
+//				PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_VOLTAGE_CAL); // start channel calibration
+			}
+		}
+	}
+
+	// update channel 2 enable state
+	if(controls->psuEnableCtrlBtns[1].is_state_changed)
+	{
+		if(controls->psuEnableCtrlBtns[1].btn_state == Pressed)
+		{
+			PSU_enableChannelCtrl(PSU_CHANNEL_2, 1);
+		}
+		else
+		{
+			PSU_enableChannelCtrl(PSU_CHANNEL_2, 0);
+		}
+	}
+
+// PSU control tick handler
+	  PSU_updateTickHandler();
+}
+
+/**
  * @brief Update tick event handler to save DAC EEPROM values
  * @param None
  * @retval None
  */
 void PSU_updateTickHandler(void)
 {
-	static uint16_t scan_idx;
+	// measure output PSU parameters
+	PSU_measureOutputParameters(PSU_CHANNEL_1, channel1_ui_data.channel_measured_data);
+	PSU_measureOutputParameters(PSU_CHANNEL_2, channel2_ui_data.channel_measured_data);
 
-	if(scan_idx++ >= SCAN_TICKS_DELAY)
+
+	// send messages to the user interface if calibration state is changed
+	if(psu_calibration_ctrl.is_state_changed)
 	{
-		scan_idx = 0; // reset divider counter
+		psu_calibration_ctrl.is_state_changed = 0; // reset flag to prevent sending multiple messages
 
-		// send messages to the user interface if calibration state is changed
-		if(psu_calibration_ctrl.is_state_changed)
+		psu_status[psu_calibration_ctrl.channel]->is_status_changed = 1;
+
+		// send error code to the interface
+		if(psu_calibration_ctrl.is_error)
 		{
-			psu_calibration_ctrl.is_state_changed = 0; // reset flag to prevent sending multiple messages
-			psu_status.is_status_changed = 1;
-			psu_status.channel = psu_calibration_ctrl.channel;
+			psu_calibration_ctrl.is_error = 0; // reset flag
 
-			// send error code to the interface
-			if(psu_calibration_ctrl.is_error)
-			{
-				psu_calibration_ctrl.is_error = 0; // reset flag
-
-				psu_status.is_error = 1;
-				psu_status.error_code = psu_calibration_ctrl.error_code;
-			}
-
-			// send measured data ready state
-			if(psu_calibration_ctrl.is_measured_data_ready)
-			{
-				psu_status.status_code = CAL_DATA_READY;
-			}
-
-			// send calibration finished state
-			if(psu_calibration_ctrl.is_finished)
-			{
-				psu_status.status_code = CAL_FINISHED;
-			}
-
-			// emit callback
-			if(callback != NULL)
-			{
-				callback(&psu_status);
-			}
+			psu_status[psu_calibration_ctrl.channel]->is_error = 1;
+			psu_status[psu_calibration_ctrl.channel]->error_code = psu_calibration_ctrl.error_code;
 		}
 
-		if(psu_calibration_ctrl.is_voltage_discharge)
+		// send measured data ready state
+		if(psu_calibration_ctrl.is_measured_data_ready)
 		{
-			if(psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal > VOLTAGE_CAL_LVL)
-			{
-				psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal -= VOLTAGE_DISCH_STEP;
-				PSU_setRawVoltageDac(psu_calibration_ctrl.channel, psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal);
-			}
-			else
-			{
-				psu_calibration_ctrl.is_voltage_discharge = 0;
-				psu_calibration_ctrl.is_finished = 1;
-				psu_calibration_ctrl.is_state_changed = 1;
-			}
+			psu_status[psu_calibration_ctrl.channel]->status_code = CAL_DATA_READY;
+		}
+
+		// send calibration finished state
+		if(psu_calibration_ctrl.is_finished)
+		{
+			psu_status[psu_calibration_ctrl.channel]->status_code = CAL_FINISHED;
 		}
 	}
 
+	// discharge output voltage after the voltage calibration
+	if(psu_calibration_ctrl.is_voltage_discharge)
+	{
+		if(psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal > VOLTAGE_CAL_LVL)
+		{
+			psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal -= VOLTAGE_DISCH_STEP;
+			PSU_setRawVoltageDac(psu_calibration_ctrl.channel, psu_channels_ctrl[psu_calibration_ctrl.channel]->voltageDacVal);
+		}
+		else
+		{
+			psu_calibration_ctrl.is_voltage_discharge = 0;
+			psu_calibration_ctrl.is_finished = 1;
+			psu_calibration_ctrl.is_state_changed = 1;
+		}
+	}
+
+	// handle saving DAC value into the EEPROM after the 3 s last edit
 	if(!is_calibration_mode)
 	{
 		// check DAC voltage update counter - if its value wasn't updated during 3 s save value in DAC EEPROM

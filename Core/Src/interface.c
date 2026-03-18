@@ -19,7 +19,6 @@ static void updateUI(void);
 
 // callback functions
 static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p);
-static void on_psu_calibration_status_changed(PSU_CalibrationStatus* psu_status);
 
 // LVGL frame buffers
 static uint16_t buf_1[9600];
@@ -48,6 +47,10 @@ static lv_obj_t * on_off_ch2_btn;
 static lv_obj_t* ch1_btn_label;
 static lv_obj_t* ch2_btn_label;
 
+extern PSU_UI_ChannelData channel1_ui_data, channel2_ui_data;
+
+static uint32_t set_parameters_lbl_text_colors[3] = {TEXT_COLOR, TEXT_COLOR_STEP_COARSE, TEXT_COLOR_STEP_LOWEST};
+
 /********************************************************* driver functions *************************************************************/
 /**
  * @brief Initialize LVGL and add interface objects to screen
@@ -56,10 +59,7 @@ static lv_obj_t* ch2_btn_label;
  */
 void LCDIF_InitInterface(void)
 {
-	// init callbacks
-	PSU_setOnPsuCalibrationStatusUpdatedCb(on_psu_calibration_status_changed);
-
-	//Initialize LVGL UI library
+//Initialize LVGL UI library
 	lv_init();
 
 /* Initialize display items */
@@ -335,7 +335,6 @@ void LCDIF_InitInterface(void)
     ch2_btn_label = lv_label_create(on_off_ch2_btn);
     lv_label_set_text(ch2_btn_label, "Off");
     lv_obj_center(ch2_btn_label);
-
 }
 
 /**
@@ -346,7 +345,7 @@ void LCDIF_InitInterface(void)
 void LCDIF_UpdateLvglTimer(void)
 {
 	static uint16_t lvgl_timer_div;
-	if(lvgl_timer_div++ >= LVGL_TIMER_DIV) // update timer with 5 ms period
+	if(lvgl_timer_div++ >= (LVGL_TIMER_DIV-1)) // update timer with 5 ms period
 	{
 	  lvgl_timer_div = 0;
 
@@ -376,7 +375,84 @@ void LCDIF_UpdateLvglTick(void)
  */
 static void updateUI(void)
 {
+// update PSU channel 1 measured parameters
+	// measured voltage
+	lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
 
+	// measured current
+	if(channel1_ui_data.channel_measured_data->current_ma < 1000)
+	{
+		lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+	}
+	else
+	{
+		lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+	}
+
+	// CV/CC mode indication
+	if(channel1_ui_data.channel_measured_data->is_current_limit)
+	{
+		lv_led_off(cv_ch1_led);
+		lv_led_on(cc_ch1_led);
+	}
+	else
+	{
+		lv_led_on(cv_ch1_led);
+		lv_led_off(cc_ch1_led);
+	}
+
+// update PSU channel 1 set parameters
+	// set voltage value
+	lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
+	lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+
+	// set current limit value
+	lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
+	lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+
+	// is channel enabled
+	lv_obj_set_style_bg_color(on_off_ch1_btn, lv_color_hex(channel1_ui_data.channel_set_values->is_enabled ? CH1_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_label_set_text(ch1_btn_label, channel1_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+
+
+// update PSU channel 2 measured parameters
+	// measured voltage
+	lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
+
+	// measured current
+	if(channel2_ui_data.channel_measured_data->current_ma < 1000)
+	{
+		lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+	}
+	else
+	{
+		lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+	}
+
+	// CV/CC mode indication
+	if(channel2_ui_data.channel_measured_data->is_current_limit)
+	{
+		lv_led_off(cv_ch2_led);
+		lv_led_on(cc_ch2_led);
+	}
+	else
+	{
+		lv_led_on(cv_ch2_led);
+		lv_led_off(cc_ch2_led);
+	}
+
+// update PSU channel 2 set parameters
+	// set voltage value
+	lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
+	lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+
+	// set current limit value
+	lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
+	lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+
+	// is channel enabled
+	lv_obj_set_style_bg_color(on_off_ch2_btn, lv_color_hex(channel2_ui_data.channel_set_values->is_enabled ? CH2_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_label_set_text(ch2_btn_label, channel2_ui_data.channel_set_values->is_enabled ? "On" : "Off");
 }
 
 /********************************************************* callback functions *************************************************************/
@@ -395,14 +471,4 @@ static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, 
 
 	ili9328_WriteGRAM(area->x1, area->y1, area->x2, area->y2, (uint16_t*)color_p, width*height);
 	lv_display_flush_ready(disp);
-}
-
-/**
- * @brief PSU calibration status changed callback
- * @param: psu_status - data structure pointer with PSU calibration status data
- * @return: None
- */
-static void on_psu_calibration_status_changed(PSU_CalibrationStatus* psu_status)
-{
-
 }

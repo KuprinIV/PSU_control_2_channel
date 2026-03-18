@@ -9,16 +9,22 @@
 #define INC_PSU_CHANNEL_CTRL_H_
 
 #include "stm32f4xx_hal.h"
+#include "board_controls.h"
 
 // PSU DAC control
 #define VOLTAGE_DAC_MAX						3000U
-#define CURRENT_DAC_MAX						3000U
+#define CURRENT_DAC_MAX						3200U
 #define VOLTAGE_DAC_CALIBRATION_STEP		100U
 #define CURRENT_DAC_CALIBRATION_STEP		100U
 #define VOLTAGE_MEAS_CALIBRATION_STEP		1000U
 #define CURRENT_MEAS_CALIBRATION_STEP		100U
-#define DAC_SAVE_EEPROM_TICKS_DELAY			3000
+#define DAC_SAVE_EEPROM_TICKS_DELAY			(3000/STATE_SCAN_PERIOD_MS)
 #define SCAN_TICKS_DELAY					50
+
+#define VOLTAGE_SET_STEP_FINE				5
+#define VOLTAGE_SET_STEP_COARSE				25
+#define CURRENT_SET_STEP_FINE				10
+#define CURRENT_SET_STEP_COARSE				100
 
 // PSU calibration
 #define VOLTAGE_CALIB_STEPS_NUM				(VOLTAGE_DAC_MAX/VOLTAGE_DAC_CALIBRATION_STEP+1)
@@ -87,7 +93,11 @@ typedef struct
 {
 	uint16_t is_enabled;
 	uint16_t voltageDacVal;
+	uint16_t voltageSetVal;
+	uint8_t voltageSetStepIdx;
 	uint16_t currentDacVal;
+	uint16_t currentSetVal;
+	uint8_t currentSetStepIdx;
 	uint16_t voltageDacSaveValCntr;
 	uint16_t currentDacSaveValCntr;
 }ChannelCtrl;
@@ -124,17 +134,22 @@ typedef struct
 
 typedef struct
 {
-	PSU_Channel channel;
 	uint8_t is_status_changed;
 	uint8_t status_code;
 	uint8_t is_error;
 	uint8_t error_code;
 }PSU_CalibrationStatus;
 
-typedef void (*onPsuCalibrationStatusUpdatedCb)(PSU_CalibrationStatus* psu_status);
+
+typedef struct
+{
+	uint8_t is_calibration;
+	ChannelCtrl* channel_set_values;
+	PSU_MeasuredParams* channel_measured_data;
+	PSU_CalibrationStatus* channel_calibration_status;
+}PSU_UI_ChannelData;
 
 void PSU_controlInit(void);
-void PSU_setOnPsuCalibrationStatusUpdatedCb(onPsuCalibrationStatusUpdatedCb cb);
 void PSU_enableChannelCtrl(PSU_Channel ch, uint8_t is_enabled);
 void PSU_setVoltage(PSU_Channel ch, uint16_t voltage_10mv);
 void PSU_setCurrentLimit(PSU_Channel ch, uint16_t current_1ma);
@@ -143,7 +158,9 @@ void PSU_setRawCurrentDac(PSU_Channel ch, uint16_t current_dac_code);
 void PSU_getChannelDacValues(PSU_Channel ch, uint16_t* voltage_dac_code, uint16_t* current_dac_code);
 void PSU_measureOutputParameters(PSU_Channel ch, PSU_MeasuredParams* psu_mp);
 void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_CalibrationType cal_type);
+void PSU_goToThePrevCalibrationStep(void);
 void PSU_goToTheNextCalibrationStep(void);
+void PSU_handleControls(ControlsState* controls);
 void PSU_updateTickHandler(void);
 
 

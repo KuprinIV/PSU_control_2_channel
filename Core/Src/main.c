@@ -24,6 +24,7 @@
 #include "ili9328.h"
 #include "interface.h"
 #include "psu_channel_ctrl.h"
+#include "board_controls.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -33,9 +34,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define LCD_COLOR_BLUE          0x001F
-#define LCD_COLOR_GREEN         0x07E0
-#define LCD_COLOR_RED           0xF800
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -160,14 +159,14 @@ int main(void)
 	  {
 		  is_scan_event = 0; // reset flag
 
+		  // scan board controls
+		  BC_ScanControls();
+
 		  // increment LVGL tick
 		  LCDIF_UpdateLvglTick();
 
 		  // update LVGL timer
 		  LCDIF_UpdateLvglTimer();
-
-		  // PSU control tick handler
-		  PSU_updateTickHandler();
 	  }
   }
   /* USER CODE END 3 */

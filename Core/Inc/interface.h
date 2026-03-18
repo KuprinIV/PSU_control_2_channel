@@ -11,10 +11,12 @@
 //#include "board_controls.h"
 #include "ili9328.h"
 
-#define LVGL_TIMER_DIV			9
+#define LVGL_TIMER_DIV			10
 #define CH1_ITEMS_COLOR			0xFFAF20
 #define CH2_ITEMS_COLOR			0x00FFFF
 #define TEXT_COLOR				0xFFFFFF
+#define TEXT_COLOR_STEP_COARSE	0x00FF00
+#define TEXT_COLOR_STEP_LOWEST	0x0000FF
 #define BUTTON_DEFAULT_COLOR	0x858FA2
 
 typedef enum {None = 0, CurrentValue = 1, StimFreq = 2, StimDuration = 3} FocusedLabel;

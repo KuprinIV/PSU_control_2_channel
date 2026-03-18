@@ -359,7 +359,11 @@ void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint1
 	ili9328_SetDisplayWindow(x1, y1, width, height);
 
 	/* Set Cursor */
-	ili9328_SetCursor(x1-1, y1);
+	if(x1 >= 1)
+	{
+		x1--;
+	}
+	ili9328_SetCursor(x1, y1);
 
 	/* Prepare to write GRAM */
 	LCD_IO_WriteReg(LCD_REG_34);
