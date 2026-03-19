@@ -350,24 +350,17 @@ uint16_t ili9328_ReadReg(uint8_t LCDReg)
   return (LCD_IO_ReadData());
 }
 
-void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* fb, uint16_t fb_len)
+void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t width, uint16_t height, uint16_t* fb)
 {
-	uint16_t height = y2 - y1 + 1;
-	uint16_t width = x2 - x1 + 1;
-
 	// set display window
-	ili9328_SetDisplayWindow(x1, y1, width, height);
+//	ili9328_SetDisplayWindow(x1, y1, width, height);
 
 	/* Set Cursor */
-	if(x1 >= 1)
-	{
-		x1--;
-	}
 	ili9328_SetCursor(x1, y1);
 
 	/* Prepare to write GRAM */
 	LCD_IO_WriteReg(LCD_REG_34);
-	LCD_IO_WriteMultipleData(fb, fb_len);
+	LCD_IO_WriteMultipleData(fb, (uint32_t)width*height);
 
 }
 

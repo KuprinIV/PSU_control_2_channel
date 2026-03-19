@@ -28,7 +28,11 @@ void BC_ScanControls(void)
 {
 	static uint16_t scan_idx;
 
-	if(scan_idx++ >= (STATE_SCAN_PERIOD_MS-1))
+	if(scan_idx < STATE_SCAN_PERIOD_MS)
+	{
+		scan_idx++;
+	}
+	else
 	{
 		scan_idx = 0;
 

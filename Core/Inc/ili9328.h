@@ -154,7 +154,7 @@ void     ili9328_DisplayOff(void);
 void     ili9328_SetCursor(uint16_t Xpos, uint16_t Ypos);
 void     ili9328_WritePixel(uint16_t Xpos, uint16_t Ypos, uint16_t RGBCode);
 uint16_t ili9328_ReadPixel(uint16_t Xpos, uint16_t Ypos);
-void 	 ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t x2, uint16_t y2, uint16_t* fb, uint16_t fb_len);
+void 	 ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t width, uint16_t height, uint16_t* fb);
 
 void     ili9328_DrawHLine(uint16_t RGBCode, uint16_t Xpos, uint16_t Ypos, uint16_t Length);
 void     ili9328_DrawVLine(uint16_t RGBCode, uint16_t Xpos, uint16_t Ypos, uint16_t Length);
@@ -164,8 +164,6 @@ void     ili9328_SetDisplayWindow(uint16_t Xpos, uint16_t Ypos, uint16_t Width, 
 
 uint16_t ili9328_GetLcdPixelWidth(void);
 uint16_t ili9328_GetLcdPixelHeight(void);
-
-void 	 ili9328_SetOnDmaTransferCompleteCb(onDmaTransferCompleteCb cb);
 
 /* LCD driver structure */
 extern LCD_DrvTypeDef   ili9328_drv;

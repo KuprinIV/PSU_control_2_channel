@@ -11,6 +11,8 @@
 #include "psu_channel_ctrl.h"
 #include <string.h>
 
+//#define LVGL_TEST
+
 // misc functions
 
 
@@ -21,35 +23,42 @@ static void updateUI(void);
 static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p);
 
 // LVGL frame buffers
-static uint16_t buf_1[9600];
-static uint16_t buf_2[9600];
+static uint16_t buf_1[19200];
+static uint16_t buf_2[19200];
 
 // LVGL interface objects
 static lv_display_t * disp;
 
-static lv_obj_t * meas_volt_ch1_lbl;
-static lv_obj_t * meas_volt_ch2_lbl;
-static lv_obj_t * meas_curr_ch1_lbl;
-static lv_obj_t * meas_curr_ch2_lbl;
+#ifndef LVGL_TEST
+	static lv_obj_t * meas_volt_ch1_lbl;
+	static lv_obj_t * meas_volt_ch2_lbl;
+	static lv_obj_t * meas_curr_ch1_lbl;
+	static lv_obj_t * meas_curr_ch2_lbl;
 
-static lv_obj_t * set_volt_ch1_lbl;
-static lv_obj_t * set_volt_ch2_lbl;
-static lv_obj_t * set_curr_ch1_lbl;
-static lv_obj_t * set_curr_ch2_lbl;
+	static lv_obj_t * set_volt_ch1_lbl;
+	static lv_obj_t * set_volt_ch2_lbl;
+	static lv_obj_t * set_curr_ch1_lbl;
+	static lv_obj_t * set_curr_ch2_lbl;
 
-static lv_obj_t * cv_ch1_led;
-static lv_obj_t * cc_ch1_led;
-static lv_obj_t * cv_ch2_led;
-static lv_obj_t * cc_ch2_led;
+	static lv_obj_t * cv_ch1_led;
+	static lv_obj_t * cc_ch1_led;
+	static lv_obj_t * cv_ch2_led;
+	static lv_obj_t * cc_ch2_led;
 
-static lv_obj_t * on_off_ch1_btn;
-static lv_obj_t * on_off_ch2_btn;
-static lv_obj_t* ch1_btn_label;
-static lv_obj_t* ch2_btn_label;
+	static lv_obj_t * on_off_ch1_btn;
+	static lv_obj_t * on_off_ch2_btn;
+	static lv_obj_t* ch1_btn_label;
+	static lv_obj_t* ch2_btn_label;
+
+	static uint32_t set_parameters_lbl_text_colors[3] = {TEXT_COLOR, TEXT_COLOR_STEP_COARSE, TEXT_COLOR_STEP_LOWEST};
+#else
+	static lv_obj_t * test_lbl;
+	static uint16_t test_cntr = 0;
+#endif
 
 extern PSU_UI_ChannelData channel1_ui_data, channel2_ui_data;
 
-static uint32_t set_parameters_lbl_text_colors[3] = {TEXT_COLOR, TEXT_COLOR_STEP_COARSE, TEXT_COLOR_STEP_LOWEST};
+static volatile uint8_t is_ui_updating = 0;
 
 /********************************************************* driver functions *************************************************************/
 /**
@@ -72,6 +81,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x000000), LV_PART_MAIN);
 	lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 
+#ifndef LVGL_TEST
 // channels parameters frame rectangles
     // create rectangle object
     lv_obj_t * rect_ch1 = lv_obj_create(lv_screen_active());
@@ -335,6 +345,14 @@ void LCDIF_InitInterface(void)
     ch2_btn_label = lv_label_create(on_off_ch2_btn);
     lv_label_set_text(ch2_btn_label, "Off");
     lv_obj_center(ch2_btn_label);
+#else
+    lv_obj_t * test_lbl = lv_label_create(lv_screen_active());
+    lv_label_set_text_fmt(test_lbl, "%d", test_cntr);
+	lv_obj_set_style_text_font(test_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(test_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(test_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_center(test_lbl);
+#endif
 }
 
 /**
@@ -345,7 +363,11 @@ void LCDIF_InitInterface(void)
 void LCDIF_UpdateLvglTimer(void)
 {
 	static uint16_t lvgl_timer_div;
-	if(lvgl_timer_div++ >= (LVGL_TIMER_DIV-1)) // update timer with 5 ms period
+	if(lvgl_timer_div < LVGL_TIMER_DIV) // update timer with 10 ms period
+	{
+		lvgl_timer_div++;
+	}
+	else
 	{
 	  lvgl_timer_div = 0;
 
@@ -375,84 +397,151 @@ void LCDIF_UpdateLvglTick(void)
  */
 static void updateUI(void)
 {
+	is_ui_updating = ((channel1_ui_data.is_update_reg | channel2_ui_data.is_update_reg) > 0); // check UI update flag
+
+	if(!is_ui_updating) return;
+
+#ifndef LVGL_TEST
 // update PSU channel 1 measured parameters
 	// measured voltage
-	lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
+	{
+		lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
+	}
 
 	// measured current
-	if(channel1_ui_data.channel_measured_data->current_ma < 1000)
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
 	{
-		lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
-	}
-	else
-	{
-		lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+		if(channel1_ui_data.channel_measured_data->current_ma < 1000)
+		{
+			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+		}
+		else
+		{
+			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+		}
 	}
 
 	// CV/CC mode indication
-	if(channel1_ui_data.channel_measured_data->is_current_limit)
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
 	{
-		lv_led_off(cv_ch1_led);
-		lv_led_on(cc_ch1_led);
-	}
-	else
-	{
-		lv_led_on(cv_ch1_led);
-		lv_led_off(cc_ch1_led);
+		if(channel1_ui_data.channel_measured_data->is_current_limit)
+		{
+			lv_led_off(cv_ch1_led);
+			lv_led_on(cc_ch1_led);
+		}
+		else
+		{
+			lv_led_on(cv_ch1_led);
+			lv_led_off(cc_ch1_led);
+		}
 	}
 
 // update PSU channel 1 set parameters
 	// set voltage value
-	lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
-	lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+	{
+		lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
+	}
+
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+	{
+		lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+	}
 
 	// set current limit value
-	lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
-	lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
+	{
+		lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
+	}
+
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
+	{
+		lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+	}
 
 	// is channel enabled
-	lv_obj_set_style_bg_color(on_off_ch1_btn, lv_color_hex(channel1_ui_data.channel_set_values->is_enabled ? CH1_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
-	lv_label_set_text(ch1_btn_label, channel1_ui_data.channel_set_values->is_enabled ? "On" : "Off");
-
+	if(channel1_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
+	{
+		lv_obj_set_style_bg_color(on_off_ch1_btn, lv_color_hex(channel1_ui_data.channel_set_values->is_enabled ? CH1_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+		lv_label_set_text(ch1_btn_label, channel1_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+	}
 
 // update PSU channel 2 measured parameters
 	// measured voltage
-	lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
+	{
+		lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
+	}
 
 	// measured current
-	if(channel2_ui_data.channel_measured_data->current_ma < 1000)
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
 	{
-		lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
-	}
-	else
-	{
-		lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+		if(channel2_ui_data.channel_measured_data->current_ma < 1000)
+		{
+			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+		}
+		else
+		{
+			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+		}
 	}
 
 	// CV/CC mode indication
-	if(channel2_ui_data.channel_measured_data->is_current_limit)
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
 	{
-		lv_led_off(cv_ch2_led);
-		lv_led_on(cc_ch2_led);
-	}
-	else
-	{
-		lv_led_on(cv_ch2_led);
-		lv_led_off(cc_ch2_led);
+		if(channel2_ui_data.channel_measured_data->is_current_limit)
+		{
+			lv_led_off(cv_ch2_led);
+			lv_led_on(cc_ch2_led);
+		}
+		else
+		{
+			lv_led_on(cv_ch2_led);
+			lv_led_off(cc_ch2_led);
+		}
 	}
 
 // update PSU channel 2 set parameters
 	// set voltage value
-	lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
-	lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+	{
+		lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
+	}
+
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+	{
+		lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+	}
 
 	// set current limit value
-	lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
-	lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
+	{
+		lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
+	}
+
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
+	{
+		lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+	}
 
 	// is channel enabled
-	lv_obj_set_style_bg_color(on_off_ch2_btn, lv_color_hex(channel2_ui_data.channel_set_values->is_enabled ? CH2_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
-	lv_label_set_text(ch2_btn_label, channel2_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+	if(channel2_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
+	{
+		lv_obj_set_style_bg_color(on_off_ch2_btn, lv_color_hex(channel2_ui_data.channel_set_values->is_enabled ? CH2_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+		lv_label_set_text(ch2_btn_label, channel2_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+	}
+#else
+	test_cntr++;
+	lv_label_set_text_fmt(test_lbl, "%d", test_cntr); // TODO: try lv_label_set_text_static(lv_obj_t *obj, const char *text)
+#endif
+
+	// reset update registers
+	channel1_ui_data.is_update_reg = 0;
+	channel2_ui_data.is_update_reg = 0;
+
+	// reset UI updating flag
+	is_ui_updating = 0;
 }
 
 /********************************************************* callback functions *************************************************************/
@@ -466,9 +555,13 @@ static void updateUI(void)
  */
 static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p)
 {
-	int height = area->y2 - area->y1 + 1;
-	int width = area->x2 - area->x1 + 1;
+	uint16_t height = area->y2 - area->y1 + 1;
+	uint16_t width = area->x2 - area->x1 + 1;
 
-	ili9328_WriteGRAM(area->x1, area->y1, area->x2, area->y2, (uint16_t*)color_p, width*height);
+	if(!is_ui_updating)
+	{
+		ili9328_WriteGRAM(area->x1, area->y1, width, height, (uint16_t*)color_p);
+	}
 	lv_display_flush_ready(disp);
+
 }

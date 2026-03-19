@@ -43,7 +43,7 @@ static int16_t current_cal_measured_data[CALIBRATION_MEAS_DATA_AVGS] = {0};
 static uint16_t voltageSetValSteps[3] = {VOLTAGE_SET_STEP_FINE, VOLTAGE_SET_STEP_COARSE, 1};
 static int16_t currentSetValSteps[3] = {CURRENT_SET_STEP_FINE, CURRENT_SET_STEP_COARSE, 1};
 
-PSU_UI_ChannelData channel1_ui_data = {0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status}, channel2_ui_data = {0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status};
+PSU_UI_ChannelData channel1_ui_data = {0, 0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status}, channel2_ui_data = {0, 0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status};
 static PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_ui_data};
 
 /**
@@ -753,12 +753,18 @@ void PSU_goToTheNextCalibrationStep(void)
  */
 void PSU_handleControls(ControlsState* controls)
 {
+	// reset update registers
+	channel1_ui_data.is_update_reg = 0;
+	channel2_ui_data.is_update_reg = 0;
+
 // channel 1
 	if(channels_ui_data[PSU_CHANNEL_1]->is_calibration)
 	{
 		// voltage set encoder button press is go to the next step
 		if(controls->voltageSetEnc[0].is_btn_state_changed)
 		{
+			controls->voltageSetEnc[0].is_btn_state_changed = 0;
+
 			if(controls->voltageSetEnc[0].btn_state == Pressed)
 			{
 				if(psu_calibration_ctrl.is_finished)
@@ -782,6 +788,8 @@ void PSU_handleControls(ControlsState* controls)
 		// current set encoder button press is go to the previous step
 		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
 		{
+			controls->currentLimitSetEnc[0].is_btn_state_changed = 0;
+
 			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
 			{
 				PSU_goToThePrevCalibrationStep();
@@ -798,6 +806,8 @@ void PSU_handleControls(ControlsState* controls)
 		// update calibration parameter value
 		if(controls->voltageSetEnc[0].is_enc_state_changed)
 		{
+			controls->voltageSetEnc[0].is_enc_state_changed = 0;
+
 			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
 			{
 				psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal += controls->voltageSetEnc[0].counter_offset;
@@ -819,6 +829,9 @@ void PSU_handleControls(ControlsState* controls)
 		// get step value changing
 		if(controls->voltageSetEnc[0].is_btn_state_changed)
 		{
+			controls->voltageSetEnc[0].is_btn_state_changed = 0;
+			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+
 			if(controls->voltageSetEnc[0].btn_state == Pressed)
 			{
 				psu_ch1_ctrl.voltageSetStepIdx = (psu_ch1_ctrl.voltageSetStepIdx+1)&0x01;
@@ -833,6 +846,9 @@ void PSU_handleControls(ControlsState* controls)
 		// update voltage set value
 		if(controls->voltageSetEnc[0].is_enc_state_changed)
 		{
+			controls->voltageSetEnc[0].is_enc_state_changed = 0;
+			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
+
 			psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal += controls->voltageSetEnc[0].counter_offset*voltageSetValSteps[psu_ch1_ctrl.voltageSetStepIdx];
 			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
 			PSU_setVoltage(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal);
@@ -842,6 +858,9 @@ void PSU_handleControls(ControlsState* controls)
 		// get step value changing
 		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
 		{
+			controls->currentLimitSetEnc[0].is_btn_state_changed = 0;
+			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+
 			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
 			{
 				psu_ch1_ctrl.currentSetStepIdx = (psu_ch1_ctrl.currentSetStepIdx+1)&0x01;
@@ -855,6 +874,9 @@ void PSU_handleControls(ControlsState* controls)
 		// update current set value
 		if(controls->currentLimitSetEnc[0].is_enc_state_changed)
 		{
+			controls->currentLimitSetEnc[0].is_enc_state_changed = 0;
+			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_MASK;
+
 			psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal += controls->currentLimitSetEnc[0].counter_offset*currentSetValSteps[psu_ch1_ctrl.currentSetStepIdx];
 			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal, 0, CURRENT_DAC_MAX);
 			PSU_setCurrentLimit(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal);
@@ -873,6 +895,9 @@ void PSU_handleControls(ControlsState* controls)
 	// update channel 1 enable state
 	if(controls->psuEnableCtrlBtns[0].is_state_changed)
 	{
+		controls->psuEnableCtrlBtns[0].is_state_changed = 0;
+		channel1_ui_data.is_update_reg |= UI_UPDATE_ON_OFF_MASK;
+
 		if(controls->psuEnableCtrlBtns[0].btn_state == Pressed)
 		{
 			PSU_enableChannelCtrl(PSU_CHANNEL_1, 1);
@@ -889,6 +914,8 @@ void PSU_handleControls(ControlsState* controls)
 		// voltage set encoder button press is go to the next step
 		if(controls->voltageSetEnc[1].is_btn_state_changed)
 		{
+			controls->voltageSetEnc[1].is_btn_state_changed = 0;
+
 			if(controls->voltageSetEnc[1].btn_state == Pressed)
 			{
 				if(psu_calibration_ctrl.is_finished)
@@ -912,6 +939,8 @@ void PSU_handleControls(ControlsState* controls)
 		// current set encoder button press is go to the previous step
 		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
 		{
+			controls->currentLimitSetEnc[1].is_btn_state_changed = 0;
+
 			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
 			{
 				PSU_goToThePrevCalibrationStep();
@@ -928,6 +957,8 @@ void PSU_handleControls(ControlsState* controls)
 		// update calibration parameter value
 		if(controls->voltageSetEnc[1].is_enc_state_changed)
 		{
+			controls->voltageSetEnc[1].is_enc_state_changed = 0;
+
 			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
 			{
 				psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal += controls->voltageSetEnc[1].counter_offset;
@@ -949,6 +980,9 @@ void PSU_handleControls(ControlsState* controls)
 		// get step value changing
 		if(controls->voltageSetEnc[1].is_btn_state_changed)
 		{
+			controls->voltageSetEnc[1].is_btn_state_changed = 0;
+			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+
 			if(controls->voltageSetEnc[1].btn_state == Pressed)
 			{
 				psu_ch2_ctrl.voltageSetStepIdx = (psu_ch2_ctrl.voltageSetStepIdx+1)&0x01;
@@ -963,6 +997,9 @@ void PSU_handleControls(ControlsState* controls)
 		// update voltage set value
 		if(controls->voltageSetEnc[1].is_enc_state_changed)
 		{
+			controls->voltageSetEnc[1].is_enc_state_changed = 0;
+			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
+
 			psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal += controls->voltageSetEnc[1].counter_offset*voltageSetValSteps[psu_ch2_ctrl.voltageSetStepIdx];
 			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
 			PSU_setVoltage(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal);
@@ -972,6 +1009,9 @@ void PSU_handleControls(ControlsState* controls)
 		// get step value changing
 		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
 		{
+			controls->currentLimitSetEnc[1].is_btn_state_changed = 0;
+			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+
 			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
 			{
 				psu_ch2_ctrl.currentSetStepIdx = (psu_ch2_ctrl.currentSetStepIdx+1)&0x01;
@@ -985,6 +1025,9 @@ void PSU_handleControls(ControlsState* controls)
 		// update current set value
 		if(controls->currentLimitSetEnc[1].is_enc_state_changed)
 		{
+			controls->currentLimitSetEnc[1].is_enc_state_changed = 0;
+			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_MASK;
+
 			psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal += controls->currentLimitSetEnc[1].counter_offset*currentSetValSteps[psu_ch2_ctrl.currentSetStepIdx];
 			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal, 0, CURRENT_DAC_MAX);
 			PSU_setCurrentLimit(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal);
@@ -1003,6 +1046,9 @@ void PSU_handleControls(ControlsState* controls)
 	// update channel 2 enable state
 	if(controls->psuEnableCtrlBtns[1].is_state_changed)
 	{
+		controls->psuEnableCtrlBtns[1].is_state_changed = 0;
+		channel2_ui_data.is_update_reg |= UI_UPDATE_ON_OFF_MASK;
+
 		if(controls->psuEnableCtrlBtns[1].btn_state == Pressed)
 		{
 			PSU_enableChannelCtrl(PSU_CHANNEL_2, 1);
@@ -1028,6 +1074,8 @@ void PSU_updateTickHandler(void)
 	PSU_measureOutputParameters(PSU_CHANNEL_1, channel1_ui_data.channel_measured_data);
 	PSU_measureOutputParameters(PSU_CHANNEL_2, channel2_ui_data.channel_measured_data);
 
+	channel1_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
+	channel2_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
 
 	// send messages to the user interface if calibration state is changed
 	if(psu_calibration_ctrl.is_state_changed)

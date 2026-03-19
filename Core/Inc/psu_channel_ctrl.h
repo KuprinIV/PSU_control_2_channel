@@ -64,6 +64,15 @@
 #define ADDR_FLASH_SECTOR_10    ((uint32_t)0x080C0000) /* Base @ of Sector 10, 128 Kbytes */
 #define ADDR_FLASH_SECTOR_11    ((uint32_t)0x080E0000) /* Base @ of Sector 11, 128 Kbytes */
 
+#define UI_UPDATE_MEAS_VOLT_MASK			0x01
+#define UI_UPDATE_MEAS_CURR_MASK			0x02
+#define UI_UPDATE_CC_CV_MASK				0x04
+#define UI_UPDATE_SET_VOLT_MASK				0x08
+#define UI_UPDATE_SET_VOLT_STEP_MASK		0x10
+#define UI_UPDATE_SET_CURR_MASK				0x20
+#define UI_UPDATE_SET_CURR_STEP_MASK		0x40
+#define UI_UPDATE_ON_OFF_MASK				0x80
+
 typedef enum
 {
 	PSU_CHANNEL_1 = 0,
@@ -144,6 +153,7 @@ typedef struct
 typedef struct
 {
 	uint8_t is_calibration;
+	uint8_t is_update_reg;
 	ChannelCtrl* channel_set_values;
 	PSU_MeasuredParams* channel_measured_data;
 	PSU_CalibrationStatus* channel_calibration_status;
