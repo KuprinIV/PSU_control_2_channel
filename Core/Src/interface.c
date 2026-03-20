@@ -23,8 +23,8 @@ static void updateUI(void);
 static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, uint8_t * color_p);
 
 // LVGL frame buffers
-static uint16_t buf_1[19200];
-static uint16_t buf_2[19200];
+static uint16_t buf_1[9600];
+static uint16_t buf_2[9600];
 
 // LVGL interface objects
 static lv_display_t * disp;
@@ -57,8 +57,6 @@ static lv_display_t * disp;
 #endif
 
 extern PSU_UI_ChannelData channel1_ui_data, channel2_ui_data;
-
-static volatile uint8_t is_ui_updating = 0;
 
 /********************************************************* driver functions *************************************************************/
 /**
@@ -346,12 +344,13 @@ void LCDIF_InitInterface(void)
     lv_label_set_text(ch2_btn_label, "Off");
     lv_obj_center(ch2_btn_label);
 #else
-    lv_obj_t * test_lbl = lv_label_create(lv_screen_active());
-    lv_label_set_text_fmt(test_lbl, "%d", test_cntr);
+    test_lbl = lv_label_create(lv_screen_active());
 	lv_obj_set_style_text_font(test_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(test_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(test_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
-	lv_obj_center(test_lbl);
+//	lv_obj_center(test_lbl);
+	lv_obj_align(test_lbl, LV_ALIGN_TOP_LEFT, 10, 10);
+	lv_label_set_text_fmt(test_lbl, "%d", test_cntr);
 #endif
 }
 
@@ -397,9 +396,7 @@ void LCDIF_UpdateLvglTick(void)
  */
 static void updateUI(void)
 {
-	is_ui_updating = ((channel1_ui_data.is_update_reg | channel2_ui_data.is_update_reg) > 0); // check UI update flag
-
-	if(!is_ui_updating) return;
+	if(!(channel1_ui_data.is_update_reg | channel2_ui_data.is_update_reg)) return;
 
 #ifndef LVGL_TEST
 // update PSU channel 1 measured parameters
@@ -533,15 +530,12 @@ static void updateUI(void)
 	}
 #else
 	test_cntr++;
-	lv_label_set_text_fmt(test_lbl, "%d", test_cntr); // TODO: try lv_label_set_text_static(lv_obj_t *obj, const char *text)
+	lv_label_set_text_fmt(test_lbl, "%d", test_cntr);
 #endif
 
 	// reset update registers
 	channel1_ui_data.is_update_reg = 0;
 	channel2_ui_data.is_update_reg = 0;
-
-	// reset UI updating flag
-	is_ui_updating = 0;
 }
 
 /********************************************************* callback functions *************************************************************/
@@ -558,10 +552,7 @@ static void update_display_area_cb(lv_display_t * disp, const lv_area_t * area, 
 	uint16_t height = area->y2 - area->y1 + 1;
 	uint16_t width = area->x2 - area->x1 + 1;
 
-	if(!is_ui_updating)
-	{
-		ili9328_WriteGRAM(area->x1, area->y1, width, height, (uint16_t*)color_p);
-	}
+	ili9328_WriteGRAM(area->x1, area->y1, width, height, (uint16_t*)color_p);
 	lv_display_flush_ready(disp);
 
 }

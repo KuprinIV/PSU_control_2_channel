@@ -133,7 +133,7 @@ void ili9328_Init(void)
     ili9328_WriteReg(LCD_REG_0, 0x0001); /* Start internal OSC. */
     ili9328_WriteReg(LCD_REG_1, 0x0100); /* Set SS and SM bit */
     ili9328_WriteReg(LCD_REG_2, 0x0700); /* Set 1 line inversion */
-    ili9328_WriteReg(LCD_REG_3, 0x1018); /* Set GRAM write direction and BGR=1. */
+    ili9328_WriteReg(LCD_REG_3, 0x1038); /* Set GRAM write direction and BGR=1. */
     ili9328_WriteReg(LCD_REG_4, 0x0000); /* Resize register */
     ili9328_WriteReg(LCD_REG_8, 0x0302); /* Set the back porch and front porch */
     ili9328_WriteReg(LCD_REG_9, 0x0000); /* Set non-display area refresh cycle ISC[3:0] */
@@ -159,7 +159,7 @@ void ili9328_Init(void)
     /* Set GRAM area ---------------------------------------------------------*/
     ili9328_SetDisplayWindow(0, 0, ili9328_GetLcdPixelWidth(), ili9328_GetLcdPixelHeight());
     
-    ili9328_WriteReg(LCD_REG_96,  0xA700); /* Gate Scan Line(GS=1, scan direction is G320~G1) */
+    ili9328_WriteReg(LCD_REG_96,  0x2700); /* Gate Scan Line(GS=0, scan direction is G1~G320) */
     ili9328_WriteReg(LCD_REG_97,  0x0003); /* NDL,VLE, REV */
     ili9328_WriteReg(LCD_REG_106, 0x0000); /* set scrolling line */
     
@@ -182,7 +182,7 @@ void ili9328_Init(void)
     /* set GRAM write direction and BGR = 1 */
     /* I/D=00 (Horizontal : increment, Vertical : decrement) */
     /* AM=1 (address is updated in vertical writing direction) */
-    ili9328_WriteReg(LCD_REG_3, 0x1018);
+    ili9328_WriteReg(LCD_REG_3, 0x1038);
   }
   
   /* Set the Cursor */ 
@@ -353,7 +353,7 @@ uint16_t ili9328_ReadReg(uint8_t LCDReg)
 void ili9328_WriteGRAM(uint16_t x1, uint16_t y1, uint16_t width, uint16_t height, uint16_t* fb)
 {
 	// set display window
-//	ili9328_SetDisplayWindow(x1, y1, width, height);
+	ili9328_SetDisplayWindow(x1, y1, width, height);
 
 	/* Set Cursor */
 	ili9328_SetCursor(x1, y1);
@@ -474,7 +474,7 @@ void ili9328_DrawBitmap(uint16_t Xpos, uint16_t Ypos, uint8_t *pbmp)
   /* Set GRAM write direction and BGR = 1 */
   /* I/D = 01 (Horizontal : increment, Vertical : decrement) */
   /* AM = 1 (address is updated in vertical writing direction) */
-  ili9328_WriteReg(LCD_REG_3, 0x1018);
+  ili9328_WriteReg(LCD_REG_3, 0x1038);
 }
 
 /**
