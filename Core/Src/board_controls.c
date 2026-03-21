@@ -14,9 +14,9 @@
 static void BC_ScanEncoder(EncoderState* ec, EncoderHW* ehw);
 static void BC_ScanButton(ButtonState* btn, ButtonHW* bhw);
 
-static EncoderHW voltageSetEncsHw[2] = {{TIM8, EC4S_GPIO_Port, EC4S_Pin}, {TIM4, EC3S_GPIO_Port, EC3S_Pin}};
-static EncoderHW currentLimitSetEncsHw[2] = {{TIM3, EC2S_GPIO_Port, EC2S_Pin}, {TIM2, EC1S_GPIO_Port, EC1S_Pin}};
-static ButtonHW psuChannelsEnableCtrlBtnHw[2] = {{BTN2_GPIO_Port, BTN2_Pin}, {BTN1_GPIO_Port, BTN1_Pin}};
+static EncoderHW voltageSetEncsHw[2] = {{TIM8, EC4S_GPIO_Port, EC4S_Pin, 0, 0, 0, 0, 0, 0}, {TIM4, EC3S_GPIO_Port, EC3S_Pin, 0, 0, 0, 0, 0, 0}};
+static EncoderHW currentLimitSetEncsHw[2] = {{TIM3, EC2S_GPIO_Port, EC2S_Pin, 0, 0, 0, 0, 0, 0}, {TIM2, EC1S_GPIO_Port, EC1S_Pin, 0, 0, 0, 0, 0, 0}};
+static ButtonHW psuChannelsEnableCtrlBtnHw[2] = {{BTN2_GPIO_Port, BTN2_Pin, 0}, {BTN1_GPIO_Port, BTN1_Pin, 0}};
 static ControlsState psu_controls_state = {{{0, NotPressed, 0, 0}, {0, NotPressed, 0, 0}}, {{0, NotPressed, 0, 0}, {0, NotPressed, 0, 0}}, {{NotPressed, 0}, {NotPressed, 0}}};
 
 /**
@@ -65,13 +65,6 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
 	uint8_t is_encoder_state_changed = 0;
 	uint8_t is_btn_state_changed = 0;
 	ButtonPressState ec_btn_prev_state = enc->btn_state;
-
-	static uint8_t btn_pin_state_prev;
-	static uint16_t long_btn_press_cntr;
-	static uint8_t is_long_btn_press_detected;
-	static uint8_t is_initial_state_got;
-	static uint32_t encoder_cntr_prev;
-	static int8_t offset;
 	int8_t delta = 0;
 	uint8_t abs_delta = 0;
 
@@ -79,22 +72,22 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
 	uint8_t btn_pin_state = (HAL_GPIO_ReadPin(ehw->btn_port, ehw->btn_pin) == GPIO_PIN_RESET);
 	uint32_t encoder_cntr = (ehw->scan_timer->CNT);
 
-	if(is_initial_state_got)
+	if(ehw->is_initial_state_got)
 	{
 		// get encoder button state
-		if(btn_pin_state == 1 && btn_pin_state_prev == 0) // button is pressed
+		if(btn_pin_state == 1 && ehw->btn_pin_state_prev == 0) // button is pressed
 		{
 			enc->btn_state = Pressed;
 		}
-		else if(btn_pin_state == 1 && btn_pin_state_prev == 1) // button is holding on
+		else if(btn_pin_state == 1 && ehw->btn_pin_state_prev == 1) // button is holding on
 		{
-			if(long_btn_press_cntr < LONG_PRESS_TICKS)
+			if(ehw->long_btn_press_cntr < LONG_PRESS_TICKS)
 			{
-				long_btn_press_cntr++;
+				ehw->long_btn_press_cntr++;
 			}
-			else if(!is_long_btn_press_detected)
+			else if(!ehw->is_long_btn_press_detected)
 			{
-				is_long_btn_press_detected = 1;
+				ehw->is_long_btn_press_detected = 1;
 				enc->btn_state = LongPressed;
 			}
 		}
@@ -102,20 +95,20 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
 		{
 			enc->btn_state = NotPressed;
 			// reset button long press tick counter and long press detection flag
-			long_btn_press_cntr = 0;
-			is_long_btn_press_detected = 0;
+			ehw->long_btn_press_cntr = 0;
+			ehw->is_long_btn_press_detected = 0;
 		}
 
 		// get encoder counter offset
-		delta = (int8_t)(encoder_cntr_prev - encoder_cntr + offset);
+		delta = (int8_t)(encoder_cntr - ehw->encoder_cntr_prev + ehw->enc_offset);
 		abs_delta = ABS(delta);
 
 		// because STM32 encoder timer changes counter by 2 per 1 pulse, divide it by 2
 		if(abs_delta > 1)
 		{
 			enc->counter_offset = delta/2;
-			offset = delta - 2*enc->counter_offset; // keep reminder from division
-			encoder_cntr_prev = encoder_cntr;
+			ehw->enc_offset = delta - 2*enc->counter_offset; // keep reminder from division
+			ehw->encoder_cntr_prev = encoder_cntr;
 		}
 		else
 		{
@@ -123,7 +116,7 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
 		}
 
 		// update button pin and encoder counter previous state
-		btn_pin_state_prev = btn_pin_state;
+		ehw->btn_pin_state_prev = btn_pin_state;
 
 		if(enc->counter_offset != 0)
 		{
@@ -138,9 +131,9 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
 	else
 	{
 		// set initial encoder state parameters
-		btn_pin_state_prev = btn_pin_state;
-		encoder_cntr_prev = encoder_cntr;
-		is_initial_state_got = 1;
+		ehw->btn_pin_state_prev = btn_pin_state;
+		ehw->encoder_cntr_prev = encoder_cntr;
+		ehw->is_initial_state_got = 1;
 	}
 
 	// set is encoder state changed
@@ -155,17 +148,14 @@ static void BC_ScanEncoder(EncoderState* enc, EncoderHW* ehw)
   */
 static void BC_ScanButton(ButtonState* btn, ButtonHW* bhw)
 {
-	static uint8_t btn_pin_state_prev;
-	uint8_t btn_pin_state = 0;
+	uint8_t btn_pin_state = (HAL_GPIO_ReadPin(bhw->btn_port, bhw->btn_pin) == GPIO_PIN_RESET);
 
-	btn_pin_state = (HAL_GPIO_ReadPin(bhw->btn_port, bhw->btn_pin) == GPIO_PIN_RESET);
-
-	if(btn_pin_state == 1 && btn_pin_state_prev == 0) // button is pressed
+	if(btn_pin_state == 1 && bhw->btn_pin_state_prev == 0) // button is pressed
 	{
 		btn->btn_state = Pressed;
 		btn->is_state_changed = 1;
 	}
-	else if(btn_pin_state == 0 && btn_pin_state_prev == 1) // button is released
+	else if(btn_pin_state == 0 && bhw->btn_pin_state_prev == 1) // button is released
 	{
 		btn->btn_state = NotPressed;
 		btn->is_state_changed = 1;
@@ -176,5 +166,5 @@ static void BC_ScanButton(ButtonState* btn, ButtonHW* bhw)
 	}
 
 	// update button pin previous state
-	btn_pin_state_prev = btn_pin_state;
+	bhw->btn_pin_state_prev = btn_pin_state;
 }

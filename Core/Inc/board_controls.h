@@ -34,12 +34,19 @@ typedef struct
 	TIM_TypeDef* scan_timer;
 	GPIO_TypeDef* btn_port;
 	uint16_t btn_pin;
+	uint8_t btn_pin_state_prev;
+	uint16_t long_btn_press_cntr;
+	uint8_t is_long_btn_press_detected;
+	uint8_t is_initial_state_got;;
+	uint32_t encoder_cntr_prev;
+	int8_t enc_offset;
 }EncoderHW;
 
 typedef struct
 {
 	GPIO_TypeDef* btn_port;
 	uint16_t btn_pin;
+	uint8_t btn_pin_state_prev;
 }ButtonHW;
 
 typedef struct

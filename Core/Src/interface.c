@@ -208,7 +208,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_volt_ch1_title_lbl, LV_ALIGN_TOP_LEFT, 8, 140);
 
 	set_volt_ch1_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_volt_ch1_lbl, "0.00 V");
+	lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
 	lv_obj_set_style_text_font(set_volt_ch1_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_volt_ch1_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -224,7 +224,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_curr_ch1_title_lbl, LV_ALIGN_TOP_LEFT, 81, 140);
 
 	set_curr_ch1_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_curr_ch1_lbl, "0.00 A");
+	lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
 	lv_obj_set_style_text_font(set_curr_ch1_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_curr_ch1_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -241,7 +241,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_volt_ch2_title_lbl, LV_ALIGN_TOP_LEFT, 168, 140);
 
 	set_volt_ch2_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_volt_ch2_lbl, "0.00 V");
+	lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
 	lv_obj_set_style_text_font(set_volt_ch2_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_volt_ch2_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -257,7 +257,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_curr_ch2_title_lbl, LV_ALIGN_TOP_LEFT, 240, 140);
 
 	set_curr_ch2_lbl = lv_label_create(lv_screen_active());
-	lv_label_set_text(set_curr_ch2_lbl, "0.00 A");
+	lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
 	lv_obj_set_style_text_font(set_curr_ch2_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(set_curr_ch2_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -403,7 +403,7 @@ static void updateUI(void)
 	// measured voltage
 	if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
 	{
-		lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
+		lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
 	}
 
 	// measured current
@@ -411,11 +411,11 @@ static void updateUI(void)
 	{
 		if(channel1_ui_data.channel_measured_data->current_ma < 1000)
 		{
-			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
 		}
 		else
 		{
-			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
 		}
 	}
 
@@ -438,7 +438,7 @@ static void updateUI(void)
 	// set voltage value
 	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
 	{
-		lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
+		lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
 	}
 
 	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
@@ -449,7 +449,7 @@ static void updateUI(void)
 	// set current limit value
 	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
 	{
-		lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
+		lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
 	}
 
 	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
@@ -468,7 +468,7 @@ static void updateUI(void)
 	// measured voltage
 	if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
 	{
-		lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
+		lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
 	}
 
 	// measured current
@@ -476,11 +476,11 @@ static void updateUI(void)
 	{
 		if(channel2_ui_data.channel_measured_data->current_ma < 1000)
 		{
-			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
 		}
 		else
 		{
-			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
 		}
 	}
 
@@ -503,7 +503,7 @@ static void updateUI(void)
 	// set voltage value
 	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
 	{
-		lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
+		lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
 	}
 
 	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
@@ -514,7 +514,7 @@ static void updateUI(void)
 	// set current limit value
 	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
 	{
-		lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
+		lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
 	}
 
 	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)

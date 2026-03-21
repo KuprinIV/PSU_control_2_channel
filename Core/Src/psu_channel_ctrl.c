@@ -53,6 +53,9 @@ static PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_u
  */
 void PSU_controlInit(void)
 {
+	// read calibration data
+	PSU_readCalibrationData(&psu_ch1_calibration, &psu_ch2_calibration);
+
 	// check DAC I2C connection and read data
 	// channel 1
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_1], VOLTAGE_DAC_ADDR))
@@ -98,9 +101,6 @@ void PSU_controlInit(void)
 
 	// channel 2
 	INA226_Init(psu_control_i2cs[PSU_CHANNEL_2]);
-
-	// read calibration data
-	PSU_readCalibrationData(&psu_ch1_calibration, &psu_ch2_calibration);
 }
 
 /**
