@@ -157,6 +157,7 @@ typedef struct
 	ChannelCtrl* channel_set_values;
 	PSU_MeasuredParams* channel_measured_data;
 	PSU_CalibrationStatus* channel_calibration_status;
+	ChannelCalibrationData* channel_calibration_data;
 }PSU_UI_ChannelData;
 
 void PSU_controlInit(void);

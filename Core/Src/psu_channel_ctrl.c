@@ -43,8 +43,9 @@ static int16_t current_cal_measured_data[CALIBRATION_MEAS_DATA_AVGS] = {0};
 static uint16_t voltageSetValSteps[3] = {VOLTAGE_SET_STEP_FINE, VOLTAGE_SET_STEP_COARSE, 1};
 static int16_t currentSetValSteps[3] = {CURRENT_SET_STEP_FINE, CURRENT_SET_STEP_COARSE, 1};
 
-PSU_UI_ChannelData channel1_ui_data = {0, 0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status}, channel2_ui_data = {0, 0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status};
-static PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_ui_data};
+static PSU_UI_ChannelData channel1_ui_data = {0, 0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status, &psu_ch1_calibration};
+static PSU_UI_ChannelData channel2_ui_data = {0, 0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status, &psu_ch2_calibration};
+PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_ui_data};
 
 /**
  * @brief PSU control initialize
@@ -753,324 +754,173 @@ void PSU_goToTheNextCalibrationStep(void)
  */
 void PSU_handleControls(ControlsState* controls)
 {
-	// reset update registers
-	channel1_ui_data.is_update_reg = 0;
-	channel2_ui_data.is_update_reg = 0;
+	PSU_Channel chan_to_ctrl;
 
-// channel 1
-	if(channels_ui_data[PSU_CHANNEL_1]->is_calibration)
-	{
-		// voltage set encoder button press is go to the next step
-		if(controls->voltageSetEnc[0].is_btn_state_changed)
+    for(uint8_t i = 0; i < 2; i++)
+    {
+    	chan_to_ctrl = (PSU_Channel)i;
+
+    	// reset update registers
+    	channels_ui_data[i]->is_update_reg = 0;
+
+		if(channels_ui_data[i]->is_calibration)
 		{
-			controls->voltageSetEnc[0].is_btn_state_changed = 0;
-
-			if(controls->voltageSetEnc[0].btn_state == Pressed)
+			// voltage set encoder button press is go to the next step
+			if(controls->voltageSetEnc[i].is_btn_state_changed)
 			{
-				channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+				controls->voltageSetEnc[i].is_btn_state_changed = 0;
 
-				if(psu_calibration_ctrl.is_finished)
+				if(controls->voltageSetEnc[i].btn_state == Pressed)
 				{
-					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+
+					if(psu_calibration_ctrl.is_finished)
 					{
-						PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
+						if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+						{
+							PSU_calibrationModeCtrl(chan_to_ctrl, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
+						}
+						else
+						{
+							PSU_calibrationModeCtrl(chan_to_ctrl, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
+						}
 					}
 					else
 					{
-						PSU_calibrationModeCtrl(PSU_CHANNEL_1, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
+						PSU_goToTheNextCalibrationStep();
 					}
+				}
+			}
+
+			// current set encoder button press is go to the previous step
+			if(controls->currentLimitSetEnc[i].is_btn_state_changed)
+			{
+				controls->currentLimitSetEnc[i].is_btn_state_changed = 0;
+
+				if(controls->currentLimitSetEnc[i].btn_state == Pressed)
+				{
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+					PSU_goToThePrevCalibrationStep();
+				}
+				else if(controls->currentLimitSetEnc[i].btn_state == LongPressed)
+				{
+					if(!psu_calibration_ctrl.is_finished)
+					{
+						channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+						PSU_calibrationModeCtrl(chan_to_ctrl, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
+					}
+				}
+			}
+
+			// update calibration parameter value
+			if(controls->voltageSetEnc[i].is_enc_state_changed)
+			{
+				controls->voltageSetEnc[i].is_enc_state_changed = 0;
+				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
+
+				if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+				{
+					psu_channels_ctrl[i]->voltageDacVal += controls->voltageSetEnc[i].counter_offset;
+					checkValueLimits(&psu_channels_ctrl[i]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
+					PSU_setRawVoltageDac(chan_to_ctrl, psu_channels_ctrl[i]->voltageDacVal);
 				}
 				else
 				{
-					PSU_goToTheNextCalibrationStep();
+					psu_channels_ctrl[i]->currentDacVal += controls->voltageSetEnc[i].counter_offset;
+					checkValueLimits(&psu_channels_ctrl[i]->currentDacVal, 0, CURRENT_DAC_MAX);
+					PSU_setRawCurrentDac(chan_to_ctrl, psu_channels_ctrl[i]->currentDacVal);
 				}
 			}
-		}
-
-		// current set encoder button press is go to the previous step
-		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
-		{
-			controls->currentLimitSetEnc[0].is_btn_state_changed = 0;
-
-			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
-			{
-				channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-				PSU_goToThePrevCalibrationStep();
-			}
-			else if(controls->currentLimitSetEnc[0].btn_state == LongPressed)
-			{
-				if(!psu_calibration_ctrl.is_finished)
-				{
-					channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-					PSU_calibrationModeCtrl(PSU_CHANNEL_1, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
-				}
-			}
-		}
-
-		// update calibration parameter value
-		if(controls->voltageSetEnc[0].is_enc_state_changed)
-		{
-			controls->voltageSetEnc[0].is_enc_state_changed = 0;
-			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
-
-			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
-			{
-				psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal += controls->voltageSetEnc[0].counter_offset;
-				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
-				PSU_setRawVoltageDac(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->voltageDacVal);
-			}
-			else
-			{
-				psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal += controls->voltageSetEnc[0].counter_offset;
-				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal, 0, CURRENT_DAC_MAX);
-				PSU_setRawCurrentDac(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->currentDacVal);
-			}
-		}
-	}
-	else
-	{
-	// channel 1 set
-		// voltage
-		// get step value changing
-		if(controls->voltageSetEnc[0].is_btn_state_changed)
-		{
-			controls->voltageSetEnc[0].is_btn_state_changed = 0;
-			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
-
-			if(controls->voltageSetEnc[0].btn_state == Pressed)
-			{
-				psu_ch1_ctrl.voltageSetStepIdx = (psu_ch1_ctrl.voltageSetStepIdx+1)&0x01;
-			}
-			else if(controls->voltageSetEnc[0].btn_state == LongPressed)
-			{
-				psu_ch1_ctrl.voltageSetStepIdx = 2;
-			}
-
-		}
-
-		// update voltage set value
-		if(controls->voltageSetEnc[0].is_enc_state_changed)
-		{
-			controls->voltageSetEnc[0].is_enc_state_changed = 0;
-			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
-
-			psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal += controls->voltageSetEnc[0].counter_offset*voltageSetValSteps[psu_ch1_ctrl.voltageSetStepIdx];
-			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
-			PSU_setVoltage(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->voltageSetVal);
-		}
-
-		// current
-		// get step value changing
-		if(controls->currentLimitSetEnc[0].is_btn_state_changed)
-		{
-			controls->currentLimitSetEnc[0].is_btn_state_changed = 0;
-			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-
-			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
-			{
-				psu_ch1_ctrl.currentSetStepIdx = (psu_ch1_ctrl.currentSetStepIdx+1)&0x01;
-			}
-			else if(controls->currentLimitSetEnc[0].btn_state == LongPressed)
-			{
-				psu_ch1_ctrl.currentSetStepIdx = 2;
-			}
-		}
-
-		// update current set value
-		if(controls->currentLimitSetEnc[0].is_enc_state_changed)
-		{
-			controls->currentLimitSetEnc[0].is_enc_state_changed = 0;
-			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_MASK;
-
-			psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal += controls->currentLimitSetEnc[0].counter_offset*currentSetValSteps[psu_ch1_ctrl.currentSetStepIdx];
-			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal, 0, CURRENT_DAC_MAX);
-			PSU_setCurrentLimit(PSU_CHANNEL_1, psu_channels_ctrl[PSU_CHANNEL_1]->currentSetVal);
-		}
-
-		// start channel calibration
-		if(controls->voltageSetEnc[0].btn_state == Pressed && controls->currentLimitSetEnc[0].btn_state == Pressed)
-		{
-			if(!is_calibration_mode)
-			{
-				PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_VOLTAGE_CAL); // start channel calibration
-			}
-		}
-	}
-
-	// update channel 1 enable state
-	if(controls->psuEnableCtrlBtns[0].is_state_changed)
-	{
-		controls->psuEnableCtrlBtns[0].is_state_changed = 0;
-		channel1_ui_data.is_update_reg |= UI_UPDATE_ON_OFF_MASK;
-
-		if(controls->psuEnableCtrlBtns[0].btn_state == Pressed)
-		{
-			PSU_enableChannelCtrl(PSU_CHANNEL_1, 1);
 		}
 		else
 		{
-			PSU_enableChannelCtrl(PSU_CHANNEL_1, 0);
-		}
-	}
-
-// channel 2
-	if(channels_ui_data[PSU_CHANNEL_2]->is_calibration)
-	{
-		// voltage set encoder button press is go to the next step
-		if(controls->voltageSetEnc[1].is_btn_state_changed)
-		{
-			controls->voltageSetEnc[1].is_btn_state_changed = 0;
-
-			if(controls->voltageSetEnc[1].btn_state == Pressed)
+		// channel set
+			// voltage
+			// get step value changing
+			if(controls->voltageSetEnc[i].is_btn_state_changed)
 			{
-				channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+				controls->voltageSetEnc[i].is_btn_state_changed = 0;
+				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
 
-				if(psu_calibration_ctrl.is_finished)
+				if(controls->voltageSetEnc[i].btn_state == Pressed)
 				{
-					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
-					{
-						PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
-					}
-					else
-					{
-						PSU_calibrationModeCtrl(PSU_CHANNEL_2, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
-					}
+					psu_channels_ctrl[i]->voltageSetStepIdx ^= 0x01;
 				}
-				else
+				else if(controls->voltageSetEnc[i].btn_state == LongPressed)
 				{
-					PSU_goToTheNextCalibrationStep();
+					psu_channels_ctrl[i]->voltageSetStepIdx = 2;
+				}
+
+			}
+
+			// update voltage set value
+			if(controls->voltageSetEnc[i].is_enc_state_changed)
+			{
+				controls->voltageSetEnc[i].is_enc_state_changed = 0;
+				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
+
+				psu_channels_ctrl[i]->voltageSetVal += controls->voltageSetEnc[i].counter_offset*voltageSetValSteps[psu_channels_ctrl[i]->voltageSetStepIdx];
+				checkValueLimits(&psu_channels_ctrl[i]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
+				PSU_setVoltage(chan_to_ctrl, psu_channels_ctrl[i]->voltageSetVal);
+			}
+
+			// current
+			// get step value changing
+			if(controls->currentLimitSetEnc[i].is_btn_state_changed)
+			{
+				controls->currentLimitSetEnc[i].is_btn_state_changed = 0;
+				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+
+				if(controls->currentLimitSetEnc[i].btn_state == Pressed)
+				{
+					psu_channels_ctrl[i]->currentSetStepIdx ^= 0x01;
+				}
+				else if(controls->currentLimitSetEnc[i].btn_state == LongPressed)
+				{
+					psu_channels_ctrl[i]->currentSetStepIdx = 2;
+				}
+			}
+
+			// update current set value
+			if(controls->currentLimitSetEnc[i].is_enc_state_changed)
+			{
+				controls->currentLimitSetEnc[i].is_enc_state_changed = 0;
+				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_MASK;
+
+				psu_channels_ctrl[i]->currentSetVal += controls->currentLimitSetEnc[i].counter_offset*currentSetValSteps[psu_channels_ctrl[i]->currentSetStepIdx];
+				checkValueLimits(&psu_channels_ctrl[i]->currentSetVal, 0, CURRENT_DAC_MAX);
+				PSU_setCurrentLimit(chan_to_ctrl, psu_channels_ctrl[i]->currentSetVal);
+			}
+
+			// start channel calibration
+			if(controls->voltageSetEnc[i].btn_state == Pressed && controls->currentLimitSetEnc[i].btn_state == Pressed)
+			{
+				if(!is_calibration_mode)
+				{
+					PSU_calibrationModeCtrl(chan_to_ctrl, 1, PSU_VOLTAGE_CAL); // start channel calibration
 				}
 			}
 		}
 
-		// current set encoder button press is go to the previous step
-		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
+		// update channel 1 enable state
+		if(controls->psuEnableCtrlBtns[i].is_state_changed)
 		{
-			controls->currentLimitSetEnc[1].is_btn_state_changed = 0;
+			controls->psuEnableCtrlBtns[i].is_state_changed = 0;
+			channels_ui_data[i]->is_update_reg |= UI_UPDATE_ON_OFF_MASK;
 
-			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
+			if(controls->psuEnableCtrlBtns[i].btn_state == Pressed)
 			{
-				channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-				PSU_goToThePrevCalibrationStep();
-			}
-			else if(controls->currentLimitSetEnc[1].btn_state == LongPressed)
-			{
-				if(!psu_calibration_ctrl.is_finished)
-				{
-					channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-					PSU_calibrationModeCtrl(PSU_CHANNEL_2, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
-				}
-			}
-		}
-
-		// update calibration parameter value
-		if(controls->voltageSetEnc[1].is_enc_state_changed)
-		{
-			controls->voltageSetEnc[1].is_enc_state_changed = 0;
-			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
-
-			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
-			{
-				psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal += controls->voltageSetEnc[1].counter_offset;
-				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
-				PSU_setRawVoltageDac(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->voltageDacVal);
+				PSU_enableChannelCtrl(chan_to_ctrl, 1);
 			}
 			else
 			{
-				psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal += controls->voltageSetEnc[1].counter_offset;
-				checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal, 0, CURRENT_DAC_MAX);
-				PSU_setRawCurrentDac(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->currentDacVal);
-			}
-		}
-	}
-	else
-	{
-	// channel 2 set
-		// voltage
-		// get step value changing
-		if(controls->voltageSetEnc[1].is_btn_state_changed)
-		{
-			controls->voltageSetEnc[1].is_btn_state_changed = 0;
-			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
-
-			if(controls->voltageSetEnc[1].btn_state == Pressed)
-			{
-				psu_ch2_ctrl.voltageSetStepIdx = (psu_ch2_ctrl.voltageSetStepIdx+1)&0x01;
-			}
-			else if(controls->voltageSetEnc[1].btn_state == LongPressed)
-			{
-				psu_ch2_ctrl.voltageSetStepIdx = 2;
-			}
-
-		}
-
-		// update voltage set value
-		if(controls->voltageSetEnc[1].is_enc_state_changed)
-		{
-			controls->voltageSetEnc[1].is_enc_state_changed = 0;
-			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
-
-			psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal += controls->voltageSetEnc[1].counter_offset*voltageSetValSteps[psu_ch2_ctrl.voltageSetStepIdx];
-			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal, 0, VOLTAGE_DAC_MAX);
-			PSU_setVoltage(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->voltageSetVal);
-		}
-
-		// current
-		// get step value changing
-		if(controls->currentLimitSetEnc[1].is_btn_state_changed)
-		{
-			controls->currentLimitSetEnc[1].is_btn_state_changed = 0;
-			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-
-			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
-			{
-				psu_ch2_ctrl.currentSetStepIdx = (psu_ch2_ctrl.currentSetStepIdx+1)&0x01;
-			}
-			else if(controls->currentLimitSetEnc[1].btn_state == LongPressed)
-			{
-				psu_ch2_ctrl.currentSetStepIdx = 2;
-			}
-		}
-
-		// update current set value
-		if(controls->currentLimitSetEnc[1].is_enc_state_changed)
-		{
-			controls->currentLimitSetEnc[1].is_enc_state_changed = 0;
-			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_MASK;
-
-			psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal += controls->currentLimitSetEnc[1].counter_offset*currentSetValSteps[psu_ch2_ctrl.currentSetStepIdx];
-			checkValueLimits(&psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal, 0, CURRENT_DAC_MAX);
-			PSU_setCurrentLimit(PSU_CHANNEL_2, psu_channels_ctrl[PSU_CHANNEL_2]->currentSetVal);
-		}
-
-		// start channel calibration
-		if(controls->voltageSetEnc[1].btn_state == Pressed && controls->currentLimitSetEnc[1].btn_state == Pressed)
-		{
-			if(!is_calibration_mode)
-			{
-				PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_VOLTAGE_CAL); // start channel calibration
+				PSU_enableChannelCtrl(chan_to_ctrl, 0);
 			}
 		}
 	}
 
-	// update channel 2 enable state
-	if(controls->psuEnableCtrlBtns[1].is_state_changed)
-	{
-		controls->psuEnableCtrlBtns[1].is_state_changed = 0;
-		channel2_ui_data.is_update_reg |= UI_UPDATE_ON_OFF_MASK;
-
-		if(controls->psuEnableCtrlBtns[1].btn_state == Pressed)
-		{
-			PSU_enableChannelCtrl(PSU_CHANNEL_2, 1);
-		}
-		else
-		{
-			PSU_enableChannelCtrl(PSU_CHANNEL_2, 0);
-		}
-	}
-
-// PSU control tick handler
-	  PSU_updateTickHandler();
+    // PSU control tick handler
+    PSU_updateTickHandler();
 }
 
 /**
