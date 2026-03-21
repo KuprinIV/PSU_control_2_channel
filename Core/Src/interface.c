@@ -29,6 +29,10 @@ static uint16_t buf_2[9600];
 // LVGL interface objects
 static lv_display_t * disp;
 
+static lv_obj_t * main_control_scr;
+static lv_obj_t * ch1_calibration_scr;
+static lv_obj_t * ch2_calibration_scr;
+
 #ifndef LVGL_TEST
 	static lv_obj_t * meas_volt_ch1_lbl;
 	static lv_obj_t * meas_volt_ch2_lbl;
@@ -50,6 +54,22 @@ static lv_display_t * disp;
 	static lv_obj_t* ch1_btn_label;
 	static lv_obj_t* ch2_btn_label;
 
+	static lv_obj_t * ch1_calib_type_lbl;
+	static lv_obj_t * ch1_calib_step_lbl;
+	static lv_obj_t * ch1_calib_instr_lbl;
+	static lv_obj_t * ch1_calib_dac_lbl;
+	static lv_obj_t * ch1_calib_next_btn;
+	static lv_obj_t * ch1_calib_next_btn_label;
+	static lv_obj_t * ch1_calib_prev_btn;
+
+	static lv_obj_t * ch2_calib_type_lbl;
+	static lv_obj_t * ch2_calib_step_lbl;
+	static lv_obj_t * ch2_calib_instr_lbl;
+	static lv_obj_t * ch2_calib_dac_lbl;
+	static lv_obj_t * ch2_calib_next_btn;
+	static lv_obj_t * ch2_calib_next_btn_label;
+	static lv_obj_t * ch2_calib_prev_btn;
+
 	static uint32_t set_parameters_lbl_text_colors[3] = {TEXT_COLOR, TEXT_COLOR_STEP_COARSE, TEXT_COLOR_STEP_LOWEST};
 #else
 	static lv_obj_t * test_lbl;
@@ -57,6 +77,7 @@ static lv_display_t * disp;
 #endif
 
 extern PSU_UI_ChannelData channel1_ui_data, channel2_ui_data;
+static uint8_t is_ch1_calibration = 0, is_ch2_calibration = 0;
 
 /********************************************************* driver functions *************************************************************/
 /**
@@ -75,17 +96,23 @@ void LCDIF_InitInterface(void)
 	lv_display_set_flush_cb(disp, update_display_area_cb); /*Set a flush callback to draw to the display*/
 	lv_display_set_buffers(disp, buf_1, buf_2, sizeof(buf_1), LV_DISPLAY_RENDER_MODE_PARTIAL); /*Set an initialized buffer*/
 
+// create screen objects
+	main_control_scr = lv_obj_create(NULL);
+	ch1_calibration_scr = lv_obj_create(NULL);
+	ch2_calibration_scr = lv_obj_create(NULL);
+
 // Change the active screen's background color
-	lv_obj_set_style_bg_color(lv_screen_active(), lv_color_hex(0x000000), LV_PART_MAIN);
-	lv_obj_set_style_text_color(lv_screen_active(), lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_bg_color(main_control_scr, lv_color_hex(0x000000), LV_PART_MAIN);
+	lv_obj_set_style_text_color(main_control_scr, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 
 #ifndef LVGL_TEST
+// ############################## main control screen interface init ######################################
 // channels parameters frame rectangles
     // create rectangle object
-    lv_obj_t * rect_ch1 = lv_obj_create(lv_screen_active());
-    lv_obj_t * rect_set_ch1 = lv_obj_create(lv_screen_active());
-    lv_obj_t * rect_ch2 = lv_obj_create(lv_screen_active());
-    lv_obj_t * rect_set_ch2 = lv_obj_create(lv_screen_active());
+    lv_obj_t * rect_ch1 = lv_obj_create(main_control_scr);
+    lv_obj_t * rect_set_ch1 = lv_obj_create(main_control_scr);
+    lv_obj_t * rect_ch2 = lv_obj_create(main_control_scr);
+    lv_obj_t * rect_set_ch2 = lv_obj_create(main_control_scr);
 
     // set size and position
     lv_obj_set_size(rect_ch1, 157, 235);
@@ -144,7 +171,7 @@ void LCDIF_InitInterface(void)
     lv_obj_set_style_pad_all(rect_set_ch2, 0, LV_PART_MAIN);          // remove margins
 
 // channels title
-    lv_obj_t * ch1_title_lbl = lv_label_create(lv_screen_active());
+    lv_obj_t * ch1_title_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(ch1_title_lbl, "CH1");
 	lv_obj_set_style_text_font(ch1_title_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(ch1_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -154,7 +181,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(ch1_title_lbl, 149);
 	lv_obj_align(ch1_title_lbl, LV_ALIGN_TOP_LEFT, 6, 4);
 
-    lv_obj_t * ch2_title_lbl = lv_label_create(lv_screen_active());
+    lv_obj_t * ch2_title_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(ch2_title_lbl, "CH2");
 	lv_obj_set_style_text_font(ch2_title_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(ch2_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -165,7 +192,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(ch2_title_lbl, LV_ALIGN_TOP_LEFT, 165, 4);
 
 // channel 1 measured parameters
-	meas_volt_ch1_lbl = lv_label_create(lv_screen_active());
+	meas_volt_ch1_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(meas_volt_ch1_lbl, "0.00 V");
 	lv_obj_set_style_text_font(meas_volt_ch1_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
 	lv_obj_set_style_text_color(meas_volt_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -173,7 +200,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(meas_volt_ch1_lbl, 155);
 	lv_obj_align(meas_volt_ch1_lbl, LV_ALIGN_TOP_LEFT, 4, 30);
 
-	meas_curr_ch1_lbl = lv_label_create(lv_screen_active());
+	meas_curr_ch1_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(meas_curr_ch1_lbl, "0.000 A");
 	lv_obj_set_style_text_font(meas_curr_ch1_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
 	lv_obj_set_style_text_color(meas_curr_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -182,7 +209,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(meas_curr_ch1_lbl, LV_ALIGN_TOP_LEFT, 4, 67);
 
 // channel 2 measured parameters
-	meas_volt_ch2_lbl = lv_label_create(lv_screen_active());
+	meas_volt_ch2_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(meas_volt_ch2_lbl, "0.00 V");
 	lv_obj_set_style_text_font(meas_volt_ch2_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
 	lv_obj_set_style_text_color(meas_volt_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -190,7 +217,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(meas_volt_ch2_lbl, 155);
 	lv_obj_align(meas_volt_ch2_lbl, LV_ALIGN_TOP_LEFT, 163, 30);
 
-	meas_curr_ch2_lbl = lv_label_create(lv_screen_active());
+	meas_curr_ch2_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(meas_curr_ch2_lbl, "0.000 A");
 	lv_obj_set_style_text_font(meas_curr_ch2_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
 	lv_obj_set_style_text_color(meas_curr_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -199,7 +226,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(meas_curr_ch2_lbl, LV_ALIGN_TOP_LEFT, 163, 67);
 
 // channel 1 set parameters
-	lv_obj_t * set_volt_ch1_title_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * set_volt_ch1_title_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text(set_volt_ch1_title_lbl, "Vset");
 	lv_obj_set_style_text_font(set_volt_ch1_title_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch1_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -207,7 +234,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_volt_ch1_title_lbl, 76);
 	lv_obj_align(set_volt_ch1_title_lbl, LV_ALIGN_TOP_LEFT, 8, 140);
 
-	set_volt_ch1_lbl = lv_label_create(lv_screen_active());
+	set_volt_ch1_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
 	lv_obj_set_style_text_font(set_volt_ch1_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -215,7 +242,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_volt_ch1_lbl, 76);
 	lv_obj_align(set_volt_ch1_lbl, LV_ALIGN_TOP_LEFT, 8, 160);
 
-	lv_obj_t * set_curr_ch1_title_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * set_curr_ch1_title_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text(set_curr_ch1_title_lbl, "Iset");
 	lv_obj_set_style_text_font(set_curr_ch1_title_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch1_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -223,7 +250,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_curr_ch1_title_lbl, 76);
 	lv_obj_align(set_curr_ch1_title_lbl, LV_ALIGN_TOP_LEFT, 81, 140);
 
-	set_curr_ch1_lbl = lv_label_create(lv_screen_active());
+	set_curr_ch1_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
 	lv_obj_set_style_text_font(set_curr_ch1_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -232,7 +259,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(set_curr_ch1_lbl, LV_ALIGN_TOP_LEFT, 81, 160);
 
 // channel 2 set parameters
-	lv_obj_t * set_volt_ch2_title_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * set_volt_ch2_title_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text(set_volt_ch2_title_lbl, "Vset");
 	lv_obj_set_style_text_font(set_volt_ch2_title_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch2_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -240,7 +267,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_volt_ch2_title_lbl, 76);
 	lv_obj_align(set_volt_ch2_title_lbl, LV_ALIGN_TOP_LEFT, 168, 140);
 
-	set_volt_ch2_lbl = lv_label_create(lv_screen_active());
+	set_volt_ch2_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
 	lv_obj_set_style_text_font(set_volt_ch2_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -248,7 +275,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_volt_ch2_lbl, 76);
 	lv_obj_align(set_volt_ch2_lbl, LV_ALIGN_TOP_LEFT, 168, 160);
 
-	lv_obj_t * set_curr_ch2_title_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * set_curr_ch2_title_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text(set_curr_ch2_title_lbl, "Iset");
 	lv_obj_set_style_text_font(set_curr_ch2_title_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch2_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -256,7 +283,7 @@ void LCDIF_InitInterface(void)
 	lv_obj_set_width(set_curr_ch2_title_lbl, 76);
 	lv_obj_align(set_curr_ch2_title_lbl, LV_ALIGN_TOP_LEFT, 240, 140);
 
-	set_curr_ch2_lbl = lv_label_create(lv_screen_active());
+	set_curr_ch2_lbl = lv_label_create(main_control_scr);
 	lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
 	lv_obj_set_style_text_font(set_curr_ch2_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
 	lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
@@ -266,61 +293,61 @@ void LCDIF_InitInterface(void)
 
 // CV/CC mode channels parameters
 	// channel 1
-	lv_obj_t * cv_ch1_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * cv_ch1_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(cv_ch1_lbl, "CV");
 	lv_obj_set_style_text_font(cv_ch1_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(cv_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(cv_ch1_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 	lv_obj_align(cv_ch1_lbl, LV_ALIGN_TOP_LEFT, 15, 108);
 
-    cv_ch1_led  = lv_led_create(lv_scr_act());
+    cv_ch1_led  = lv_led_create(main_control_scr);
     lv_obj_align(cv_ch1_led, LV_ALIGN_TOP_LEFT, 50, 108);
     lv_led_set_color(cv_ch1_led, lv_color_hex(CH1_ITEMS_COLOR));
     lv_obj_set_size(cv_ch1_led, 20, 20);
     lv_led_off(cv_ch1_led);
 
-	lv_obj_t * cc_ch1_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * cc_ch1_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(cc_ch1_lbl, "CC");
 	lv_obj_set_style_text_font(cc_ch1_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(cc_ch1_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(cc_ch1_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 	lv_obj_align(cc_ch1_lbl, LV_ALIGN_TOP_LEFT, 90, 108);
 
-    cc_ch1_led  = lv_led_create(lv_scr_act());
+    cc_ch1_led  = lv_led_create(main_control_scr);
     lv_obj_align(cc_ch1_led, LV_ALIGN_TOP_LEFT, 125, 108);
     lv_led_set_color(cc_ch1_led, lv_color_hex(CH1_ITEMS_COLOR));
     lv_obj_set_size(cc_ch1_led, 20, 20);
     lv_led_off(cc_ch1_led);
 
 	// channel 2
-	lv_obj_t * cv_ch2_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * cv_ch2_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(cv_ch2_lbl, "CV");
 	lv_obj_set_style_text_font(cv_ch2_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(cv_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(cv_ch2_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 	lv_obj_align(cv_ch2_lbl, LV_ALIGN_TOP_LEFT, 175, 108);
 
-    cv_ch2_led  = lv_led_create(lv_scr_act());
+    cv_ch2_led  = lv_led_create(main_control_scr);
     lv_obj_align(cv_ch2_led, LV_ALIGN_TOP_LEFT, 210, 108);
     lv_led_set_color(cv_ch2_led, lv_color_hex(CH2_ITEMS_COLOR));
     lv_obj_set_size(cv_ch2_led, 20, 20);
     lv_led_off(cv_ch2_led);
 
-	lv_obj_t * cc_ch2_lbl = lv_label_create(lv_screen_active());
+	lv_obj_t * cc_ch2_lbl = lv_label_create(main_control_scr);
     lv_label_set_text(cc_ch2_lbl, "CC");
 	lv_obj_set_style_text_font(cc_ch2_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(cc_ch2_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(cc_ch2_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
 	lv_obj_align(cc_ch2_lbl, LV_ALIGN_TOP_LEFT, 250, 108);
 
-    cc_ch2_led  = lv_led_create(lv_scr_act());
+    cc_ch2_led  = lv_led_create(main_control_scr);
     lv_obj_align(cc_ch2_led, LV_ALIGN_TOP_LEFT, 285, 108);
     lv_led_set_color(cc_ch2_led, lv_color_hex(CH2_ITEMS_COLOR));
     lv_obj_set_size(cc_ch2_led, 20, 20);
     lv_led_off(cc_ch2_led);
 
 // channels on/off display buttons
-    on_off_ch1_btn = lv_button_create(lv_screen_active());
+    on_off_ch1_btn = lv_button_create(main_control_scr);
     lv_obj_align(on_off_ch1_btn, LV_ALIGN_TOP_LEFT, 52, 190);
     lv_obj_add_flag(on_off_ch1_btn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_set_width(on_off_ch1_btn, 56);
@@ -332,7 +359,7 @@ void LCDIF_InitInterface(void)
     lv_label_set_text(ch1_btn_label, "Off");
     lv_obj_center(ch1_btn_label);
 
-    on_off_ch2_btn = lv_button_create(lv_screen_active());
+    on_off_ch2_btn = lv_button_create(main_control_scr);
     lv_obj_align(on_off_ch2_btn, LV_ALIGN_TOP_LEFT, 211, 190);
     lv_obj_add_flag(on_off_ch2_btn, LV_OBJ_FLAG_CHECKABLE);
     lv_obj_set_width(on_off_ch2_btn, 56);
@@ -343,8 +370,192 @@ void LCDIF_InitInterface(void)
     ch2_btn_label = lv_label_create(on_off_ch2_btn);
     lv_label_set_text(ch2_btn_label, "Off");
     lv_obj_center(ch2_btn_label);
+
+// ############################## channel 1 calibration screen interface init ######################################
+// init channel 1 calibration screen
+	lv_obj_set_style_bg_color(ch1_calibration_scr, lv_color_hex(0x000000), LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calibration_scr, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+
+	lv_obj_t * ch1_calibr_title_lbl = lv_label_create(ch1_calibration_scr);
+    lv_label_set_text(ch1_calibr_title_lbl, "CH1 calibration");
+	lv_obj_set_style_text_font(ch1_calibr_title_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calibr_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch1_calibr_title_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch1_calibr_title_lbl, 320);
+	lv_obj_align(ch1_calibr_title_lbl, LV_ALIGN_TOP_LEFT, 0, 5);
+
+	ch1_calib_next_btn = lv_button_create(ch1_calibration_scr);
+    lv_obj_align(ch1_calib_next_btn, LV_ALIGN_TOP_LEFT, 0, 60);
+	lv_obj_set_style_bg_color(ch1_calib_next_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch1_calib_next_btn, LV_OPA_COVER, LV_PART_MAIN);
+
+	ch1_calib_next_btn_label = lv_label_create(ch1_calib_next_btn);
+    lv_label_set_text(ch1_calib_next_btn_label, "Next");
+    lv_obj_center(ch1_calib_next_btn_label);
+
+	ch1_calib_prev_btn = lv_button_create(ch1_calibration_scr);
+    lv_obj_align(ch1_calib_prev_btn, LV_ALIGN_TOP_LEFT, 0, 170);
+	lv_obj_set_style_bg_color(ch1_calib_prev_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch1_calib_prev_btn, LV_OPA_COVER, LV_PART_MAIN);
+
+	lv_obj_t * ch1_calib_prev_btn_label = lv_label_create(ch1_calib_prev_btn);
+    lv_label_set_text(ch1_calib_prev_btn_label, "Prev");
+    lv_obj_center(ch1_calib_prev_btn_label);
+
+    // create rectangle object
+    lv_obj_t * rect_ch1_calib = lv_obj_create(ch1_calibration_scr);
+
+    // set size and position
+    lv_obj_set_size(rect_ch1_calib, 235, 190);
+    lv_obj_set_pos(rect_ch1_calib, 77, 40);
+
+
+    // set styles
+    // set transparent background
+    lv_obj_set_style_bg_opa(rect_ch1_calib, LV_OPA_TRANSP, LV_PART_MAIN);
+
+    // round angles
+    lv_obj_set_style_radius(rect_ch1_calib, 6, LV_PART_MAIN);
+
+    // set border
+    lv_obj_set_style_border_width(rect_ch1_calib, 1, LV_PART_MAIN);         // border width is 1 pixel
+    lv_obj_set_style_border_color(rect_ch1_calib, lv_color_hex(0xFFFFFF), LV_PART_MAIN); // white (#FFFFFF)
+    lv_obj_set_style_border_opa(rect_ch1_calib, LV_OPA_COVER, LV_PART_MAIN); // not transparent border
+
+    // remove extended parameters
+    lv_obj_set_style_shadow_width(rect_ch1_calib, 0, LV_PART_MAIN);         // remove shadow
+    lv_obj_set_style_outline_width(rect_ch1_calib, 0, LV_PART_MAIN);        // remove outline
+    lv_obj_set_style_pad_all(rect_ch1_calib, 0, LV_PART_MAIN);              // remove margins
+
+
+    ch1_calib_type_lbl = lv_label_create(ch1_calibration_scr);
+    lv_label_set_text(ch1_calib_type_lbl, "Voltage");
+	lv_obj_set_style_text_font(ch1_calib_type_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calib_type_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch1_calib_type_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch1_calib_type_lbl, 250);
+	lv_obj_align(ch1_calib_type_lbl, LV_ALIGN_TOP_LEFT, 70, 45);
+
+	ch1_calib_step_lbl = lv_label_create(ch1_calibration_scr);
+    lv_label_set_text_fmt(ch1_calib_step_lbl, "Step %d of %d", 1, VOLTAGE_CALIB_STEPS_NUM+1);
+	lv_obj_set_style_text_font(ch1_calib_step_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calib_step_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch1_calib_step_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch1_calib_step_lbl, 250);
+	lv_obj_align(ch1_calib_step_lbl, LV_ALIGN_TOP_LEFT, 70, 70);
+
+	ch1_calib_instr_lbl = lv_label_create(ch1_calibration_scr);
+	lv_label_set_long_mode(ch1_calib_instr_lbl, LV_LABEL_LONG_WRAP);     /*Break the long lines*/
+    lv_label_set_text_fmt(ch1_calib_instr_lbl, "Adjust DAC code value to set voltage %0.1f V. Control set voltage value by measure device", 0.0f);
+	lv_obj_set_style_text_font(ch1_calib_instr_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calib_instr_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch1_calib_instr_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch1_calib_instr_lbl, 230);
+	lv_obj_align(ch1_calib_instr_lbl, LV_ALIGN_TOP_LEFT, 80, 100);
+
+	ch1_calib_dac_lbl = lv_label_create(ch1_calibration_scr);
+    lv_label_set_text_fmt(ch1_calib_dac_lbl, "%d", 0);
+	lv_obj_set_style_bg_color(ch1_calib_dac_lbl, lv_color_hex(0xFF0000), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch1_calib_dac_lbl, LV_OPA_COVER, LV_PART_MAIN);
+	lv_obj_set_style_text_font(ch1_calib_dac_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch1_calib_dac_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch1_calib_dac_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch1_calib_dac_lbl, 80);
+	lv_obj_align(ch1_calib_dac_lbl, LV_ALIGN_TOP_LEFT, 153, 180);
+
+// ############################## channel 2 calibration screen interface init ######################################
+// init channel 2 calibration screen
+	lv_obj_set_style_bg_color(ch2_calibration_scr, lv_color_hex(0x000000), LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calibration_scr, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+
+	lv_obj_t * ch2_calibr_title_lbl = lv_label_create(ch2_calibration_scr);
+	lv_label_set_text(ch2_calibr_title_lbl, "CH2 calibration");
+	lv_obj_set_style_text_font(ch2_calibr_title_lbl, &lv_font_montserrat_32, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calibr_title_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch2_calibr_title_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch2_calibr_title_lbl, 320);
+	lv_obj_align(ch2_calibr_title_lbl, LV_ALIGN_TOP_LEFT, 0, 5);
+
+	ch2_calib_next_btn = lv_button_create(ch2_calibration_scr);
+	lv_obj_align(ch2_calib_next_btn, LV_ALIGN_TOP_LEFT, 245, 60);
+	lv_obj_set_style_bg_color(ch2_calib_next_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch2_calib_next_btn, LV_OPA_COVER, LV_PART_MAIN);
+
+	ch2_calib_next_btn_label = lv_label_create(ch2_calib_next_btn);
+	lv_label_set_text(ch2_calib_next_btn_label, "Next");
+	lv_obj_center(ch2_calib_next_btn_label);
+
+	ch2_calib_prev_btn = lv_button_create(ch2_calibration_scr);
+	lv_obj_align(ch2_calib_prev_btn, LV_ALIGN_TOP_LEFT, 245, 170);
+	lv_obj_set_style_bg_color(ch2_calib_prev_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch2_calib_prev_btn, LV_OPA_COVER, LV_PART_MAIN);
+
+	lv_obj_t * ch2_calib_prev_btn_label = lv_label_create(ch2_calib_prev_btn);
+	lv_label_set_text(ch2_calib_prev_btn_label, "Prev");
+	lv_obj_center(ch2_calib_prev_btn_label);
+
+	// create rectangle object
+	lv_obj_t * rect_ch2_calib = lv_obj_create(ch2_calibration_scr);
+
+	// set size and position
+	lv_obj_set_size(rect_ch2_calib, 235, 190);
+	lv_obj_set_pos(rect_ch2_calib, 5, 40);
+
+
+	// set styles
+	// set transparent background
+	lv_obj_set_style_bg_opa(rect_ch2_calib, LV_OPA_TRANSP, LV_PART_MAIN);
+
+	// round angles
+	lv_obj_set_style_radius(rect_ch2_calib, 6, LV_PART_MAIN);
+
+	// set border
+	lv_obj_set_style_border_width(rect_ch2_calib, 1, LV_PART_MAIN);         // border width is 1 pixel
+	lv_obj_set_style_border_color(rect_ch2_calib, lv_color_hex(0xFFFFFF), LV_PART_MAIN); // white (#FFFFFF)
+	lv_obj_set_style_border_opa(rect_ch2_calib, LV_OPA_COVER, LV_PART_MAIN); // not transparent border
+
+	// remove extended parameters
+	lv_obj_set_style_shadow_width(rect_ch2_calib, 0, LV_PART_MAIN);         // remove shadow
+	lv_obj_set_style_outline_width(rect_ch2_calib, 0, LV_PART_MAIN);        // remove outline
+	lv_obj_set_style_pad_all(rect_ch2_calib, 0, LV_PART_MAIN);              // remove margins
+
+	ch2_calib_type_lbl = lv_label_create(ch2_calibration_scr);
+	lv_label_set_text(ch2_calib_type_lbl, "Voltage");
+	lv_obj_set_style_text_font(ch2_calib_type_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calib_type_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch2_calib_type_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch2_calib_type_lbl, 230);
+	lv_obj_align(ch2_calib_type_lbl, LV_ALIGN_TOP_LEFT, 5, 45);
+
+	ch2_calib_step_lbl = lv_label_create(ch2_calibration_scr);
+	lv_label_set_text_fmt(ch2_calib_step_lbl, "Step %d of %d", 1, VOLTAGE_CALIB_STEPS_NUM+1);
+	lv_obj_set_style_text_font(ch2_calib_step_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calib_step_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch2_calib_step_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch2_calib_step_lbl, 230);
+	lv_obj_align(ch2_calib_step_lbl, LV_ALIGN_TOP_LEFT, 5, 70);
+
+	ch2_calib_instr_lbl = lv_label_create(ch2_calibration_scr);
+	lv_label_set_long_mode(ch2_calib_instr_lbl, LV_LABEL_LONG_WRAP);     /*Break the long lines*/
+	lv_label_set_text_fmt(ch2_calib_instr_lbl, "Adjust DAC code value to set voltage %0.1f V. Control set voltage value by measure device", 0.0f);
+	lv_obj_set_style_text_font(ch2_calib_instr_lbl, &lv_font_montserrat_16, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calib_instr_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch2_calib_instr_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch2_calib_instr_lbl, 230);
+	lv_obj_align(ch2_calib_instr_lbl, LV_ALIGN_TOP_LEFT, 10, 100);
+
+	ch2_calib_dac_lbl = lv_label_create(ch2_calibration_scr);
+	lv_label_set_text_fmt(ch2_calib_dac_lbl, "%d", 0);
+	lv_obj_set_style_bg_color(ch2_calib_dac_lbl, lv_color_hex(0xFF0000), LV_PART_MAIN);
+	lv_obj_set_style_bg_opa(ch2_calib_dac_lbl, LV_OPA_COVER, LV_PART_MAIN);
+	lv_obj_set_style_text_font(ch2_calib_dac_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
+	lv_obj_set_style_text_color(ch2_calib_dac_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
+	lv_obj_set_style_text_align(ch2_calib_dac_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
+	lv_obj_set_width(ch2_calib_dac_lbl, 80);
+	lv_obj_align(ch2_calib_dac_lbl, LV_ALIGN_TOP_LEFT, 83, 180);
+
 #else
-    test_lbl = lv_label_create(lv_screen_active());
+    test_lbl = lv_label_create(main_control_scr);
 	lv_obj_set_style_text_font(test_lbl, &lv_font_montserrat_20, LV_PART_MAIN);
 	lv_obj_set_style_text_color(test_lbl, lv_color_hex(TEXT_COLOR), LV_PART_MAIN);
 	lv_obj_set_style_text_align(test_lbl, LV_TEXT_ALIGN_CENTER, LV_PART_MAIN);
@@ -352,6 +563,9 @@ void LCDIF_InitInterface(void)
 	lv_obj_align(test_lbl, LV_ALIGN_TOP_LEFT, 10, 10);
 	lv_label_set_text_fmt(test_lbl, "%d", test_cntr);
 #endif
+
+// load main controls screen
+	lv_screen_load(main_control_scr);
 }
 
 /**
@@ -399,134 +613,197 @@ static void updateUI(void)
 	if(!(channel1_ui_data.is_update_reg | channel2_ui_data.is_update_reg)) return;
 
 #ifndef LVGL_TEST
-// update PSU channel 1 measured parameters
-	// measured voltage
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
+	if(channel1_ui_data.is_calibration && !is_ch1_calibration)
 	{
-		lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
+		is_ch1_calibration = 1;
+		lv_screen_load(ch1_calibration_scr);
 	}
-
-	// measured current
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
+	else if(channel1_ui_data.is_calibration && is_ch1_calibration)
 	{
-		if(channel1_ui_data.channel_measured_data->current_ma < 1000)
+		if((channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK))
 		{
-			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_obj_set_style_bg_color(ch1_calib_next_btn, lv_color_hex(0x00FF00), LV_PART_MAIN);
 		}
 		else
 		{
-			lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_obj_set_style_bg_color(ch1_calib_next_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
 		}
-	}
 
-	// CV/CC mode indication
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
-	{
-		if(channel1_ui_data.channel_measured_data->is_current_limit)
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
 		{
-			lv_led_off(cv_ch1_led);
-			lv_led_on(cc_ch1_led);
+			lv_obj_set_style_bg_color(ch1_calib_prev_btn, lv_color_hex(0x00FF00), LV_PART_MAIN);
 		}
 		else
 		{
-			lv_led_on(cv_ch1_led);
-			lv_led_off(cc_ch1_led);
+			lv_obj_set_style_bg_color(ch1_calib_prev_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
 		}
 	}
-
-// update PSU channel 1 set parameters
-	// set voltage value
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+	else if(!channel1_ui_data.is_calibration && is_ch1_calibration)
 	{
-		lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
+		is_ch1_calibration = 0;
+		lv_screen_load(main_control_scr);
 	}
-
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+	else if(channel2_ui_data.is_calibration && !is_ch2_calibration)
 	{
-		lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+		is_ch2_calibration = 1;
+		lv_screen_load(ch2_calibration_scr);
 	}
-
-	// set current limit value
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
+	else if(channel2_ui_data.is_calibration && is_ch2_calibration)
 	{
-		lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
-	}
-
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
-	{
-		lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
-	}
-
-	// is channel enabled
-	if(channel1_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
-	{
-		lv_obj_set_style_bg_color(on_off_ch1_btn, lv_color_hex(channel1_ui_data.channel_set_values->is_enabled ? CH1_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
-		lv_label_set_text(ch1_btn_label, channel1_ui_data.channel_set_values->is_enabled ? "On" : "Off");
-	}
-
-// update PSU channel 2 measured parameters
-	// measured voltage
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
-	{
-		lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
-	}
-
-	// measured current
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
-	{
-		if(channel2_ui_data.channel_measured_data->current_ma < 1000)
+		if((channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK))
 		{
-			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_obj_set_style_bg_color(ch2_calib_next_btn, lv_color_hex(0x00FF00), LV_PART_MAIN);
 		}
 		else
 		{
-			lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			lv_obj_set_style_bg_color(ch2_calib_next_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
 		}
-	}
 
-	// CV/CC mode indication
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
-	{
-		if(channel2_ui_data.channel_measured_data->is_current_limit)
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
 		{
-			lv_led_off(cv_ch2_led);
-			lv_led_on(cc_ch2_led);
+			lv_obj_set_style_bg_color(ch2_calib_prev_btn, lv_color_hex(0x00FF00), LV_PART_MAIN);
 		}
 		else
 		{
-			lv_led_on(cv_ch2_led);
-			lv_led_off(cc_ch2_led);
+			lv_obj_set_style_bg_color(ch2_calib_prev_btn, lv_color_hex(BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
 		}
 	}
-
-// update PSU channel 2 set parameters
-	// set voltage value
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+	else if(!channel2_ui_data.is_calibration && is_ch2_calibration)
 	{
-		lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
+		is_ch2_calibration = 0;
+		lv_screen_load(main_control_scr);
 	}
-
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+	else
 	{
-		lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
-	}
+	// update PSU channel 1 measured parameters
+		// measured voltage
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
+		{
+			lv_label_set_text_fmt(meas_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_measured_data->voltage_mv/1000.0f);
+		}
 
-	// set current limit value
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
-	{
-		lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
-	}
+		// measured current
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
+		{
+			if(channel1_ui_data.channel_measured_data->current_ma < 1000)
+			{
+				lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.3f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			}
+			else
+			{
+				lv_label_set_text_fmt(meas_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_measured_data->current_ma/1000.0f);
+			}
+		}
 
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
-	{
-		lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
-	}
+		// CV/CC mode indication
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
+		{
+			if(channel1_ui_data.channel_measured_data->is_current_limit)
+			{
+				lv_led_off(cv_ch1_led);
+				lv_led_on(cc_ch1_led);
+			}
+			else
+			{
+				lv_led_on(cv_ch1_led);
+				lv_led_off(cc_ch1_led);
+			}
+		}
 
-	// is channel enabled
-	if(channel2_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
-	{
-		lv_obj_set_style_bg_color(on_off_ch2_btn, lv_color_hex(channel2_ui_data.channel_set_values->is_enabled ? CH2_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
-		lv_label_set_text(ch2_btn_label, channel2_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+	// update PSU channel 1 set parameters
+		// set voltage value
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+		{
+			lv_label_set_text_fmt(set_volt_ch1_lbl, "%0.2f V", (float)channel1_ui_data.channel_set_values->voltageSetVal/100.0f);
+		}
+
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+		{
+			lv_obj_set_style_text_color(set_volt_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+		}
+
+		// set current limit value
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
+		{
+			lv_label_set_text_fmt(set_curr_ch1_lbl, "%0.2f A", (float)channel1_ui_data.channel_set_values->currentSetVal/1000.0f);
+		}
+
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
+		{
+			lv_obj_set_style_text_color(set_curr_ch1_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel1_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+		}
+
+		// is channel enabled
+		if(channel1_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
+		{
+			lv_obj_set_style_bg_color(on_off_ch1_btn, lv_color_hex(channel1_ui_data.channel_set_values->is_enabled ? CH1_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+			lv_label_set_text(ch1_btn_label, channel1_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+		}
+
+	// update PSU channel 2 measured parameters
+		// measured voltage
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_VOLT_MASK)
+		{
+			lv_label_set_text_fmt(meas_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_measured_data->voltage_mv/1000.0f);
+		}
+
+		// measured current
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
+		{
+			if(channel2_ui_data.channel_measured_data->current_ma < 1000)
+			{
+				lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.3f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			}
+			else
+			{
+				lv_label_set_text_fmt(meas_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_measured_data->current_ma/1000.0f);
+			}
+		}
+
+		// CV/CC mode indication
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_CC_CV_MASK)
+		{
+			if(channel2_ui_data.channel_measured_data->is_current_limit)
+			{
+				lv_led_off(cv_ch2_led);
+				lv_led_on(cc_ch2_led);
+			}
+			else
+			{
+				lv_led_on(cv_ch2_led);
+				lv_led_off(cc_ch2_led);
+			}
+		}
+
+	// update PSU channel 2 set parameters
+		// set voltage value
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_MASK)
+		{
+			lv_label_set_text_fmt(set_volt_ch2_lbl, "%0.2f V", (float)channel2_ui_data.channel_set_values->voltageSetVal/100.0f);
+		}
+
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_VOLT_STEP_MASK)
+		{
+			lv_obj_set_style_text_color(set_volt_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+		}
+
+		// set current limit value
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_MASK)
+		{
+			lv_label_set_text_fmt(set_curr_ch2_lbl, "%0.2f A", (float)channel2_ui_data.channel_set_values->currentSetVal/1000.0f);
+		}
+
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_SET_CURR_STEP_MASK)
+		{
+			lv_obj_set_style_text_color(set_curr_ch2_lbl, lv_color_hex(set_parameters_lbl_text_colors[channel2_ui_data.channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+		}
+
+		// is channel enabled
+		if(channel2_ui_data.is_update_reg & UI_UPDATE_ON_OFF_MASK)
+		{
+			lv_obj_set_style_bg_color(on_off_ch2_btn, lv_color_hex(channel2_ui_data.channel_set_values->is_enabled ? CH2_ITEMS_COLOR : BUTTON_DEFAULT_COLOR), LV_PART_MAIN);
+			lv_label_set_text(ch2_btn_label, channel2_ui_data.channel_set_values->is_enabled ? "On" : "Off");
+		}
 	}
 #else
 	test_cntr++;

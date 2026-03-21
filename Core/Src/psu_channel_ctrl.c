@@ -689,7 +689,7 @@ void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_Calibration
 			psu_calibration_ctrl.is_state_changed = 0;
 
 			// if calibration is finished save data into the flash
-			PSU_saveChannelCalibrationData(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]);
+//			PSU_saveChannelCalibrationData(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]);
 		}
 		else
 		{
@@ -767,6 +767,8 @@ void PSU_handleControls(ControlsState* controls)
 
 			if(controls->voltageSetEnc[0].btn_state == Pressed)
 			{
+				channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+
 				if(psu_calibration_ctrl.is_finished)
 				{
 					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
@@ -792,12 +794,14 @@ void PSU_handleControls(ControlsState* controls)
 
 			if(controls->currentLimitSetEnc[0].btn_state == Pressed)
 			{
+				channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 				PSU_goToThePrevCalibrationStep();
 			}
 			else if(controls->currentLimitSetEnc[0].btn_state == LongPressed)
 			{
 				if(!psu_calibration_ctrl.is_finished)
 				{
+					channel1_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 					PSU_calibrationModeCtrl(PSU_CHANNEL_1, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
 				}
 			}
@@ -807,6 +811,7 @@ void PSU_handleControls(ControlsState* controls)
 		if(controls->voltageSetEnc[0].is_enc_state_changed)
 		{
 			controls->voltageSetEnc[0].is_enc_state_changed = 0;
+			channel1_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
 
 			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
 			{
@@ -885,9 +890,9 @@ void PSU_handleControls(ControlsState* controls)
 		// start channel calibration
 		if(controls->voltageSetEnc[0].btn_state == Pressed && controls->currentLimitSetEnc[0].btn_state == Pressed)
 		{
-			if(!channels_ui_data[PSU_CHANNEL_1]->is_calibration)
+			if(!is_calibration_mode)
 			{
-//				PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_VOLTAGE_CAL); // start channel calibration
+				PSU_calibrationModeCtrl(PSU_CHANNEL_1, 1, PSU_VOLTAGE_CAL); // start channel calibration
 			}
 		}
 	}
@@ -918,6 +923,8 @@ void PSU_handleControls(ControlsState* controls)
 
 			if(controls->voltageSetEnc[1].btn_state == Pressed)
 			{
+				channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
+
 				if(psu_calibration_ctrl.is_finished)
 				{
 					if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
@@ -943,12 +950,14 @@ void PSU_handleControls(ControlsState* controls)
 
 			if(controls->currentLimitSetEnc[1].btn_state == Pressed)
 			{
+				channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 				PSU_goToThePrevCalibrationStep();
 			}
 			else if(controls->currentLimitSetEnc[1].btn_state == LongPressed)
 			{
 				if(!psu_calibration_ctrl.is_finished)
 				{
+					channel2_ui_data.is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 					PSU_calibrationModeCtrl(PSU_CHANNEL_2, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
 				}
 			}
@@ -958,6 +967,7 @@ void PSU_handleControls(ControlsState* controls)
 		if(controls->voltageSetEnc[1].is_enc_state_changed)
 		{
 			controls->voltageSetEnc[1].is_enc_state_changed = 0;
+			channel2_ui_data.is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
 
 			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
 			{
@@ -1036,9 +1046,9 @@ void PSU_handleControls(ControlsState* controls)
 		// start channel calibration
 		if(controls->voltageSetEnc[1].btn_state == Pressed && controls->currentLimitSetEnc[1].btn_state == Pressed)
 		{
-			if(!channels_ui_data[PSU_CHANNEL_2]->is_calibration)
+			if(!is_calibration_mode)
 			{
-//				PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_VOLTAGE_CAL); // start channel calibration
+				PSU_calibrationModeCtrl(PSU_CHANNEL_2, 1, PSU_VOLTAGE_CAL); // start channel calibration
 			}
 		}
 	}
