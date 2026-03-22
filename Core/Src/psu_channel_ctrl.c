@@ -13,6 +13,7 @@
 static void PSU_readCalibrationData(ChannelCalibrationData* ch1_calibration, ChannelCalibrationData* ch2_calibration);
 static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationData* ch_calibration);
 static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* array, uint16_t size, uint16_t step, uint16_t* value_out);
+static uint16_t roundValueToStep(uint16_t value_in, uint16_t step);
 static void checkValueLimits(uint16_t* val, uint16_t min, uint16_t max);
 
 static ChannelCtrl psu_ch1_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF}, psu_ch2_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF};
@@ -22,9 +23,6 @@ static ChannelCalibrationData psu_ch1_calibration, psu_ch2_calibration;
 static ChannelCalibrationData* psu_calibration_data[2] = {&psu_ch1_calibration, &psu_ch2_calibration};
 
 static PSU_MeasuredParams psu_ch1_meas_data = {0, 0, 0}, psu_ch2_meas_data = {0, 0, 0};
-
-static PSU_CalibrationStatus psu_ch1_status = {0, 0, 0, 0}, psu_ch2_status = {0, 0, 0, 0};
-static PSU_CalibrationStatus* psu_status[2] = {&psu_ch1_status, &psu_ch2_status};
 
 static PSU_GPIO_CtrlPin psu_ch1_en_pin = {DC_EN_CH1_GPIO_Port, DC_EN_CH1_Pin}, psu_ch2_en_pin = {DC_EN_CH2_GPIO_Port, DC_EN_CH2_Pin};
 static PSU_GPIO_CtrlPin* psu_en_gpio_pins[2] = {&psu_ch1_en_pin, &psu_ch2_en_pin};
@@ -43,8 +41,8 @@ static int16_t current_cal_measured_data[CALIBRATION_MEAS_DATA_AVGS] = {0};
 static uint16_t voltageSetValSteps[3] = {VOLTAGE_SET_STEP_FINE, VOLTAGE_SET_STEP_COARSE, 1};
 static int16_t currentSetValSteps[3] = {CURRENT_SET_STEP_FINE, CURRENT_SET_STEP_COARSE, 1};
 
-static PSU_UI_ChannelData channel1_ui_data = {0, 0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_ch1_status, &psu_ch1_calibration};
-static PSU_UI_ChannelData channel2_ui_data = {0, 0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_ch2_status, &psu_ch2_calibration};
+static PSU_UI_ChannelData channel1_ui_data = {0, 0, &psu_ch1_ctrl, &psu_ch1_meas_data, &psu_calibration_ctrl, &psu_ch1_calibration};
+static PSU_UI_ChannelData channel2_ui_data = {0, 0, &psu_ch2_ctrl, &psu_ch2_meas_data, &psu_calibration_ctrl, &psu_ch2_calibration};
 PSU_UI_ChannelData* channels_ui_data[2] = {&channel1_ui_data, &channel2_ui_data};
 
 /**
@@ -62,7 +60,11 @@ void PSU_controlInit(void)
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_1], VOLTAGE_DAC_ADDR))
 	{
 		psu_ch1_ctrl.voltageDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_1], VOLTAGE_DAC_ADDR, DAC_EEPROM_VALUE);
-		if(!restoreValueFromCalibrationData(psu_ch1_ctrl.voltageDacVal, psu_ch1_calibration.voltageDacCalibrationNodes, psu_ch1_calibration.voltageStepsNum, psu_ch1_calibration.voltageDacStep, &psu_ch1_ctrl.voltageSetVal))
+		if(restoreValueFromCalibrationData(psu_ch1_ctrl.voltageDacVal, psu_ch1_calibration.voltageDacCalibrationNodes, psu_ch1_calibration.voltageStepsNum, psu_ch1_calibration.voltageDacStep, &psu_ch1_ctrl.voltageSetVal))
+		{
+			psu_ch1_ctrl.voltageSetVal = roundValueToStep(psu_ch1_ctrl.voltageSetVal, VOLTAGE_SET_STEP_FINE);
+		}
+		else
 		{
 			psu_ch1_ctrl.voltageSetVal = psu_ch1_ctrl.voltageDacVal;
 		}
@@ -71,7 +73,11 @@ void PSU_controlInit(void)
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_1], CURRENT_DAC_ADDR))
 	{
 		psu_ch1_ctrl.currentDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_1], CURRENT_DAC_ADDR, DAC_EEPROM_VALUE);
-		if(!restoreValueFromCalibrationData(psu_ch1_ctrl.currentDacVal, psu_ch1_calibration.currentDacCalibrationNodes, psu_ch1_calibration.currentStepsNum, psu_ch1_calibration.currentDacStep, &psu_ch1_ctrl.currentSetVal))
+		if(restoreValueFromCalibrationData(psu_ch1_ctrl.currentDacVal, psu_ch1_calibration.currentDacCalibrationNodes, psu_ch1_calibration.currentStepsNum, psu_ch1_calibration.currentDacStep, &psu_ch1_ctrl.currentSetVal))
+		{
+			psu_ch1_ctrl.currentSetVal = roundValueToStep(psu_ch1_ctrl.currentSetVal, CURRENT_SET_STEP_FINE);
+		}
+		else
 		{
 			psu_ch1_ctrl.currentSetVal = psu_ch1_ctrl.currentDacVal;
 		}
@@ -81,7 +87,11 @@ void PSU_controlInit(void)
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_2], VOLTAGE_DAC_ADDR))
 	{
 		psu_ch2_ctrl.voltageDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_2], VOLTAGE_DAC_ADDR, DAC_EEPROM_VALUE);
-		if(!restoreValueFromCalibrationData(psu_ch2_ctrl.voltageDacVal, psu_ch2_calibration.voltageDacCalibrationNodes, psu_ch2_calibration.voltageStepsNum, psu_ch2_calibration.voltageDacStep, &psu_ch2_ctrl.voltageSetVal))
+		if(restoreValueFromCalibrationData(psu_ch2_ctrl.voltageDacVal, psu_ch2_calibration.voltageDacCalibrationNodes, psu_ch2_calibration.voltageStepsNum, psu_ch2_calibration.voltageDacStep, &psu_ch2_ctrl.voltageSetVal))
+		{
+			psu_ch2_ctrl.voltageSetVal = roundValueToStep(psu_ch2_ctrl.voltageSetVal, VOLTAGE_SET_STEP_FINE);
+		}
+		else
 		{
 			psu_ch2_ctrl.voltageSetVal = psu_ch2_ctrl.voltageDacVal;
 		}
@@ -90,7 +100,11 @@ void PSU_controlInit(void)
 	if(MCP4725_check(psu_control_i2cs[PSU_CHANNEL_2], CURRENT_DAC_ADDR))
 	{
 		psu_ch2_ctrl.currentDacVal = MCP4725_readDAC_register_and_EEPROM(psu_control_i2cs[PSU_CHANNEL_2], CURRENT_DAC_ADDR, DAC_EEPROM_VALUE);
-		if(!restoreValueFromCalibrationData(psu_ch2_ctrl.currentDacVal, psu_ch2_calibration.currentDacCalibrationNodes, psu_ch2_calibration.currentStepsNum, psu_ch2_calibration.currentDacStep, &psu_ch2_ctrl.currentSetVal))
+		if(restoreValueFromCalibrationData(psu_ch2_ctrl.currentDacVal, psu_ch2_calibration.currentDacCalibrationNodes, psu_ch2_calibration.currentStepsNum, psu_ch2_calibration.currentDacStep, &psu_ch2_ctrl.currentSetVal))
+		{
+			psu_ch2_ctrl.currentSetVal = roundValueToStep(psu_ch2_ctrl.currentSetVal, CURRENT_SET_STEP_FINE);
+		}
+		else
 		{
 			psu_ch2_ctrl.currentSetVal = psu_ch2_ctrl.currentDacVal;
 		}
@@ -211,60 +225,60 @@ static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationDat
 {
 	if(ch_calibration == NULL) return;
 
-	uint16_t calibration_temp_data[CH2_CAL_DATA_OFFSET] = {0};
-	uint32_t offset = CH2_CAL_DATA_OFFSET*(uint32_t)ch/2;
-	uint32_t data_length_in_bytes = (uint32_t)sizeof(ChannelCalibrationData);
-
-	// fill calibration data structure header
-	ch_calibration->channel_id = (uint16_t)ch;
-	ch_calibration->voltageStepsNum = VOLTAGE_CALIB_STEPS_NUM;
-	ch_calibration->voltageDacStep = VOLTAGE_DAC_CALIBRATION_STEP;
-	ch_calibration->voltageMeasStep = VOLTAGE_MEAS_CALIBRATION_STEP;
-	ch_calibration->currentStepsNum = CURRENT_CALIB_STEPS_NUM;
-	ch_calibration->currentDacStep = CURRENT_DAC_CALIBRATION_STEP;
-	ch_calibration->currentMeasStep = CURRENT_MEAS_CALIBRATION_STEP;
-
-	// store flash data into the temp buffer
-	memcpy(calibration_temp_data, (uint32_t*)(CALIBRATION_DATA_PAGE_ADDR), sizeof(calibration_temp_data));
-
-	// update channel calibration data in the temp buffer
-	memcpy(calibration_temp_data+offset, ch_calibration, data_length_in_bytes);
-
-	// erase flash memory page
-	uint32_t page_error = HAL_OK;
-	FLASH_EraseInitTypeDef page_erase_params;
-
-	page_erase_params.NbSectors = 1;
-	page_erase_params.Sector = CALIBRATION_DATA_PAGE_ADDR;
-	page_erase_params.TypeErase = FLASH_TYPEERASE_SECTORS;
-
-	if(HAL_FLASH_Unlock() == HAL_OK) // unlock flash memory
-	{
-		HAL_FLASHEx_Erase(&page_erase_params, &page_error);
-
-		// if erase operation was successful, save updated calibration data
-		if(page_error == 0xFFFFFFFF)
-		{
-			for(uint16_t i = 0; i < sizeof(calibration_temp_data)/2; i++)
-			{
-				if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, CALIBRATION_DATA_PAGE_ADDR+2*i, calibration_temp_data[i]) != HAL_OK)
-				{
-					psu_calibration_ctrl.error_code = CAL_PROGRAM_FLASH_ERR; // emit flash program error
-					break;
-				}
-			}
-		}
-		else
-		{
-			psu_calibration_ctrl.error_code = CAL_ERASE_FLASH_ERR; // emit flash erase error
-		}
-
-		HAL_FLASH_Lock();
-	}
-	else
-	{
-		psu_calibration_ctrl.error_code = CAL_UNLOCK_FLASH_ERR; // emit flash unlock error
-	}
+//	uint16_t calibration_temp_data[CH2_CAL_DATA_OFFSET] = {0};
+//	uint32_t offset = CH2_CAL_DATA_OFFSET*(uint32_t)ch/2;
+//	uint32_t data_length_in_bytes = (uint32_t)sizeof(ChannelCalibrationData);
+//
+//	// fill calibration data structure header
+//	ch_calibration->channel_id = (uint16_t)ch;
+//	ch_calibration->voltageStepsNum = VOLTAGE_CALIB_STEPS_NUM;
+//	ch_calibration->voltageDacStep = VOLTAGE_DAC_CALIBRATION_STEP;
+//	ch_calibration->voltageMeasStep = VOLTAGE_MEAS_CALIBRATION_STEP;
+//	ch_calibration->currentStepsNum = CURRENT_CALIB_STEPS_NUM;
+//	ch_calibration->currentDacStep = CURRENT_DAC_CALIBRATION_STEP;
+//	ch_calibration->currentMeasStep = CURRENT_MEAS_CALIBRATION_STEP;
+//
+//	// store flash data into the temp buffer
+//	memcpy(calibration_temp_data, (uint32_t*)(CALIBRATION_DATA_PAGE_ADDR), sizeof(calibration_temp_data));
+//
+//	// update channel calibration data in the temp buffer
+//	memcpy(calibration_temp_data+offset, ch_calibration, data_length_in_bytes);
+//
+//	// erase flash memory page
+//	uint32_t page_error = HAL_OK;
+//	FLASH_EraseInitTypeDef page_erase_params;
+//
+//	page_erase_params.NbSectors = 1;
+//	page_erase_params.Sector = CALIBRATION_DATA_PAGE_ADDR;
+//	page_erase_params.TypeErase = FLASH_TYPEERASE_SECTORS;
+//
+//	if(HAL_FLASH_Unlock() == HAL_OK) // unlock flash memory
+//	{
+//		HAL_FLASHEx_Erase(&page_erase_params, &page_error);
+//
+//		// if erase operation was successful, save updated calibration data
+//		if(page_error == 0xFFFFFFFF)
+//		{
+//			for(uint16_t i = 0; i < sizeof(calibration_temp_data)/2; i++)
+//			{
+//				if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, CALIBRATION_DATA_PAGE_ADDR+2*i, calibration_temp_data[i]) != HAL_OK)
+//				{
+//					psu_calibration_ctrl.error_code = CAL_PROGRAM_FLASH_ERR; // emit flash program error
+//					break;
+//				}
+//			}
+//		}
+//		else
+//		{
+//			psu_calibration_ctrl.error_code = CAL_ERASE_FLASH_ERR; // emit flash erase error
+//		}
+//
+//		HAL_FLASH_Lock();
+//	}
+//	else
+//	{
+//		psu_calibration_ctrl.error_code = CAL_UNLOCK_FLASH_ERR; // emit flash unlock error
+//	}
 
 	psu_calibration_ctrl.is_error = 1; // set error detection flag
 	psu_calibration_ctrl.is_state_changed = 1; // set calibration state changed flag
@@ -314,9 +328,36 @@ static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* arra
 	node_min = array[idx_min];
 	nodes_range = node_max - node_min;
 	reminder = value_in - node_min;
-	*value_out = step*idx_min + (uint16_t)((uint32_t)reminder*step/nodes_range);
+	if(nodes_range != 0)
+	{
+		*value_out = step*idx_min + (uint16_t)((uint32_t)reminder*step/nodes_range);
+	}
 
 	return 1;
+}
+
+/**
+ * @brief Round input value to the nearest step
+ * @param value_in - value to round
+ * @param step - rounding step
+ * @retval output rounded value
+ */
+static uint16_t roundValueToStep(uint16_t value_in, uint16_t step)
+{
+	uint16_t value_out = 0;
+	uint16_t div = value_in/step;
+	uint16_t reminder = value_in - (div*step);
+
+	if(reminder > step/2)
+	{
+		value_out = (div+1)*step;
+	}
+	else
+	{
+		value_out = div*step;
+	}
+
+	return value_out;
 }
 
 /**
@@ -666,11 +707,13 @@ void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_Calibration
 			// set another DAC channel parameters
 			if(cal_type == PSU_VOLTAGE_CAL)
 			{
-				PSU_setRawCurrentDac(ch, 100);
+				PSU_setRawVoltageDac(ch, psu_calibration_data[ch]->voltageDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
+				PSU_setRawCurrentDac(ch, CURRENT_CAL_LVL);
 			}
 			else
 			{
-				PSU_setRawVoltageDac(ch, 300);
+				PSU_setRawVoltageDac(ch, VOLTAGE_CAL_LVL);
+				PSU_setRawCurrentDac(ch, psu_calibration_data[ch]->currentDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
 			}
 		}
 		else
@@ -690,7 +733,7 @@ void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_Calibration
 			psu_calibration_ctrl.is_state_changed = 0;
 
 			// if calibration is finished save data into the flash
-//			PSU_saveChannelCalibrationData(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]);
+			PSU_saveChannelCalibrationData(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]);
 		}
 		else
 		{
@@ -712,6 +755,15 @@ void PSU_goToThePrevCalibrationStep(void)
 		if(psu_calibration_ctrl.currentStep > 0)
 		{
 			psu_calibration_ctrl.currentStep--;
+			// update initial DAC value to calibrate
+			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+			{
+				PSU_setRawVoltageDac(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]->voltageDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
+			}
+			else
+			{
+				PSU_setRawCurrentDac(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]->currentDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
+			}
 		}
 	}
 }
@@ -728,6 +780,16 @@ void PSU_goToTheNextCalibrationStep(void)
 		if(psu_calibration_ctrl.currentStep < (psu_calibration_ctrl.steps_num - 1))
 		{
 			psu_calibration_ctrl.currentStep++;
+
+			// update initial DAC value to calibrate
+			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+			{
+				PSU_setRawVoltageDac(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]->voltageDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
+			}
+			else
+			{
+				PSU_setRawCurrentDac(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]->currentDacCalibrationNodes[psu_calibration_ctrl.currentStep]);
+			}
 		}
 		else
 		{
@@ -772,21 +834,9 @@ void PSU_handleControls(ControlsState* controls)
 
 				if(controls->voltageSetEnc[i].btn_state == Pressed)
 				{
-					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
-
-					if(psu_calibration_ctrl.is_finished)
+					if(channels_ui_data[i]->channel_calibration_status->is_measured_data_ready)
 					{
-						if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
-						{
-							PSU_calibrationModeCtrl(chan_to_ctrl, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
-						}
-						else
-						{
-							PSU_calibrationModeCtrl(chan_to_ctrl, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
-						}
-					}
-					else
-					{
+						channels_ui_data[i]->is_update_reg |= (UI_CALIB_UPD_NEXT_STEP_MASK|UI_CALIB_UPD_SET_DAC_MASK);
 						PSU_goToTheNextCalibrationStep();
 					}
 				}
@@ -799,14 +849,17 @@ void PSU_handleControls(ControlsState* controls)
 
 				if(controls->currentLimitSetEnc[i].btn_state == Pressed)
 				{
-					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
-					PSU_goToThePrevCalibrationStep();
+					if(channels_ui_data[i]->channel_calibration_status->is_measured_data_ready)
+					{
+						channels_ui_data[i]->is_update_reg |= (UI_CALIB_UPD_PREV_STEP_MASK|UI_CALIB_UPD_SET_DAC_MASK);
+						PSU_goToThePrevCalibrationStep();
+					}
 				}
 				else if(controls->currentLimitSetEnc[i].btn_state == LongPressed)
 				{
 					if(!psu_calibration_ctrl.is_finished)
 					{
-						channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
+						channels_ui_data[i]->is_update_reg |= UI_CALIB_UPD_EXIT_MASK;
 						PSU_calibrationModeCtrl(chan_to_ctrl, 0, PSU_VOLTAGE_CAL); // stop channel calibration without data saving
 					}
 				}
@@ -816,18 +869,18 @@ void PSU_handleControls(ControlsState* controls)
 			if(controls->voltageSetEnc[i].is_enc_state_changed)
 			{
 				controls->voltageSetEnc[i].is_enc_state_changed = 0;
-				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_MASK;
+				channels_ui_data[i]->is_update_reg |= UI_CALIB_UPD_SET_DAC_MASK;
 
 				if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
 				{
 					psu_channels_ctrl[i]->voltageDacVal += controls->voltageSetEnc[i].counter_offset;
-					checkValueLimits(&psu_channels_ctrl[i]->voltageDacVal, 0, VOLTAGE_DAC_MAX);
+					checkValueLimits(&psu_channels_ctrl[i]->voltageDacVal, 0, VOLTAGE_DAC_MAX+100);
 					PSU_setRawVoltageDac(chan_to_ctrl, psu_channels_ctrl[i]->voltageDacVal);
 				}
 				else
 				{
 					psu_channels_ctrl[i]->currentDacVal += controls->voltageSetEnc[i].counter_offset;
-					checkValueLimits(&psu_channels_ctrl[i]->currentDacVal, 0, CURRENT_DAC_MAX);
+					checkValueLimits(&psu_channels_ctrl[i]->currentDacVal, 0, CURRENT_DAC_MAX+100);
 					PSU_setRawCurrentDac(chan_to_ctrl, psu_channels_ctrl[i]->currentDacVal);
 				}
 			}
@@ -840,14 +893,15 @@ void PSU_handleControls(ControlsState* controls)
 			if(controls->voltageSetEnc[i].is_btn_state_changed)
 			{
 				controls->voltageSetEnc[i].is_btn_state_changed = 0;
-				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
 
 				if(controls->voltageSetEnc[i].btn_state == Pressed)
 				{
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
 					psu_channels_ctrl[i]->voltageSetStepIdx ^= 0x01;
 				}
 				else if(controls->voltageSetEnc[i].btn_state == LongPressed)
 				{
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_VOLT_STEP_MASK;
 					psu_channels_ctrl[i]->voltageSetStepIdx = 2;
 				}
 
@@ -869,14 +923,15 @@ void PSU_handleControls(ControlsState* controls)
 			if(controls->currentLimitSetEnc[i].is_btn_state_changed)
 			{
 				controls->currentLimitSetEnc[i].is_btn_state_changed = 0;
-				channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 
 				if(controls->currentLimitSetEnc[i].btn_state == Pressed)
 				{
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 					psu_channels_ctrl[i]->currentSetStepIdx ^= 0x01;
 				}
 				else if(controls->currentLimitSetEnc[i].btn_state == LongPressed)
 				{
+					channels_ui_data[i]->is_update_reg |= UI_UPDATE_SET_CURR_STEP_MASK;
 					psu_channels_ctrl[i]->currentSetStepIdx = 2;
 				}
 			}
@@ -895,8 +950,9 @@ void PSU_handleControls(ControlsState* controls)
 			// start channel calibration
 			if(controls->voltageSetEnc[i].btn_state == Pressed && controls->currentLimitSetEnc[i].btn_state == Pressed)
 			{
-				if(!is_calibration_mode)
+				if(!is_calibration_mode && psu_channels_ctrl[i]->is_enabled)
 				{
+					channels_ui_data[i]->is_update_reg |= (UI_CALIB_UPD_NEXT_STEP_MASK|UI_CALIB_UPD_SET_DAC_MASK);
 					PSU_calibrationModeCtrl(chan_to_ctrl, 1, PSU_VOLTAGE_CAL); // start channel calibration
 				}
 			}
@@ -934,35 +990,37 @@ void PSU_updateTickHandler(void)
 	PSU_measureOutputParameters(PSU_CHANNEL_1, channel1_ui_data.channel_measured_data);
 	PSU_measureOutputParameters(PSU_CHANNEL_2, channel2_ui_data.channel_measured_data);
 
-	channel1_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
-	channel2_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
-
 	// send messages to the user interface if calibration state is changed
 	if(psu_calibration_ctrl.is_state_changed)
 	{
 		psu_calibration_ctrl.is_state_changed = 0; // reset flag to prevent sending multiple messages
 
-		psu_status[psu_calibration_ctrl.channel]->is_status_changed = 1;
-
 		// send error code to the interface
 		if(psu_calibration_ctrl.is_error)
 		{
 			psu_calibration_ctrl.is_error = 0; // reset flag
-
-			psu_status[psu_calibration_ctrl.channel]->is_error = 1;
-			psu_status[psu_calibration_ctrl.channel]->error_code = psu_calibration_ctrl.error_code;
+			channels_ui_data[psu_calibration_ctrl.channel]->is_update_reg |= UI_CALIB_UPD_ERR_MASK;
 		}
 
 		// send measured data ready state
 		if(psu_calibration_ctrl.is_measured_data_ready)
 		{
-			psu_status[psu_calibration_ctrl.channel]->status_code = CAL_DATA_READY;
+			channels_ui_data[psu_calibration_ctrl.channel]->is_update_reg |= UI_CALIB_UPD_MEAS_RDY_MASK;
 		}
 
 		// send calibration finished state
 		if(psu_calibration_ctrl.is_finished)
 		{
-			psu_status[psu_calibration_ctrl.channel]->status_code = CAL_FINISHED;
+			channels_ui_data[psu_calibration_ctrl.channel]->is_update_reg |= UI_CALIB_UPD_FINISHED_MASK;
+
+			if(psu_calibration_ctrl.cal_type == PSU_VOLTAGE_CAL)
+			{
+				PSU_calibrationModeCtrl(psu_calibration_ctrl.channel, 1, PSU_CURRENT_CAL); // after the voltage calibration go to the current calibration
+			}
+			else
+			{
+				PSU_calibrationModeCtrl(psu_calibration_ctrl.channel, 0, PSU_VOLTAGE_CAL); // stop channel calibration and save data
+			}
 		}
 	}
 
@@ -985,6 +1043,9 @@ void PSU_updateTickHandler(void)
 	// handle saving DAC value into the EEPROM after the 3 s last edit
 	if(!is_calibration_mode)
 	{
+		channel1_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
+		channel2_ui_data.is_update_reg |= (UI_UPDATE_MEAS_VOLT_MASK|UI_UPDATE_MEAS_CURR_MASK|UI_UPDATE_CC_CV_MASK);
+
 		// check DAC voltage update counter - if its value wasn't updated during 3 s save value in DAC EEPROM
 		// channel 1
 		if(psu_ch1_ctrl.voltageDacSaveValCntr < DAC_SAVE_EEPROM_TICKS_DELAY)
@@ -1030,5 +1091,10 @@ void PSU_updateTickHandler(void)
 			MCP4725_writeDAC_register(psu_control_i2cs[PSU_CHANNEL_2], CURRENT_DAC_ADDR, psu_ch2_ctrl.currentDacVal, 1);
 			psu_ch2_ctrl.currentDacSaveValCntr++; // increment counter value to single DAC value saving
 		}
+	}
+	else
+	{
+		channel1_ui_data.is_update_reg |= UI_CALIB_UPD_MEAS_MASK;
+		channel2_ui_data.is_update_reg |= UI_CALIB_UPD_MEAS_MASK;
 	}
 }

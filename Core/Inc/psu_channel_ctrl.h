@@ -14,8 +14,8 @@
 // PSU DAC control
 #define VOLTAGE_DAC_MAX						3000U
 #define CURRENT_DAC_MAX						3200U
-#define VOLTAGE_DAC_CALIBRATION_STEP		100U
-#define CURRENT_DAC_CALIBRATION_STEP		100U
+#define VOLTAGE_DAC_CALIBRATION_STEP		50U
+#define CURRENT_DAC_CALIBRATION_STEP		50U
 #define VOLTAGE_MEAS_CALIBRATION_STEP		1000U
 #define CURRENT_MEAS_CALIBRATION_STEP		100U
 #define DAC_SAVE_EEPROM_TICKS_DELAY			(3000/STATE_SCAN_PERIOD_MS)
@@ -72,6 +72,15 @@
 #define UI_UPDATE_SET_CURR_MASK				0x20
 #define UI_UPDATE_SET_CURR_STEP_MASK		0x40
 #define UI_UPDATE_ON_OFF_MASK				0x80
+
+#define UI_CALIB_UPD_MEAS_MASK				0x01
+#define UI_CALIB_UPD_NEXT_STEP_MASK			0x02
+#define UI_CALIB_UPD_PREV_STEP_MASK			0x04
+#define UI_CALIB_UPD_EXIT_MASK				0x08
+#define UI_CALIB_UPD_ERR_MASK				0x10
+#define UI_CALIB_UPD_SET_DAC_MASK			0x20
+#define UI_CALIB_UPD_MEAS_RDY_MASK			0x40
+#define UI_CALIB_UPD_FINISHED_MASK			0x80
 
 typedef enum
 {
@@ -143,20 +152,11 @@ typedef struct
 
 typedef struct
 {
-	uint8_t is_status_changed;
-	uint8_t status_code;
-	uint8_t is_error;
-	uint8_t error_code;
-}PSU_CalibrationStatus;
-
-
-typedef struct
-{
 	uint8_t is_calibration;
 	uint8_t is_update_reg;
 	ChannelCtrl* channel_set_values;
 	PSU_MeasuredParams* channel_measured_data;
-	PSU_CalibrationStatus* channel_calibration_status;
+	PSU_Calibration* channel_calibration_status;
 	ChannelCalibrationData* channel_calibration_data;
 }PSU_UI_ChannelData;
 
