@@ -307,7 +307,7 @@ static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* arra
 	}
 
 	// skip negative values
-	if(value_in > 32767)
+	if(value_in > 32767 || value_in < array[0])
 	{
 		*value_out = value_in;
 		return 1;
