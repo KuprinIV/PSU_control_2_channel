@@ -15,6 +15,7 @@ static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationDat
 static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* array, uint16_t size, uint16_t step, uint16_t* value_out);
 static uint16_t roundValueToStep(uint16_t value_in, uint16_t step);
 static void checkValueLimits(uint16_t* val, uint16_t min, uint16_t max);
+static uint32_t GetSector(uint32_t Address);
 
 static ChannelCtrl psu_ch1_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF}, psu_ch2_ctrl = {0, 0, 0, 0, 0, 0, 0, 0xFFFF, 0xFFFF};
 static ChannelCtrl* psu_channels_ctrl[2] = {&psu_ch1_ctrl, &psu_ch2_ctrl};
@@ -225,60 +226,62 @@ static void PSU_saveChannelCalibrationData(PSU_Channel ch, ChannelCalibrationDat
 {
 	if(ch_calibration == NULL) return;
 
-//	uint16_t calibration_temp_data[CH2_CAL_DATA_OFFSET] = {0};
-//	uint32_t offset = CH2_CAL_DATA_OFFSET*(uint32_t)ch/2;
-//	uint32_t data_length_in_bytes = (uint32_t)sizeof(ChannelCalibrationData);
-//
-//	// fill calibration data structure header
-//	ch_calibration->channel_id = (uint16_t)ch;
-//	ch_calibration->voltageStepsNum = VOLTAGE_CALIB_STEPS_NUM;
-//	ch_calibration->voltageDacStep = VOLTAGE_DAC_CALIBRATION_STEP;
-//	ch_calibration->voltageMeasStep = VOLTAGE_MEAS_CALIBRATION_STEP;
-//	ch_calibration->currentStepsNum = CURRENT_CALIB_STEPS_NUM;
-//	ch_calibration->currentDacStep = CURRENT_DAC_CALIBRATION_STEP;
-//	ch_calibration->currentMeasStep = CURRENT_MEAS_CALIBRATION_STEP;
-//
-//	// store flash data into the temp buffer
-//	memcpy(calibration_temp_data, (uint32_t*)(CALIBRATION_DATA_PAGE_ADDR), sizeof(calibration_temp_data));
-//
-//	// update channel calibration data in the temp buffer
-//	memcpy(calibration_temp_data+offset, ch_calibration, data_length_in_bytes);
-//
-//	// erase flash memory page
-//	uint32_t page_error = HAL_OK;
-//	FLASH_EraseInitTypeDef page_erase_params;
-//
-//	page_erase_params.NbSectors = 1;
-//	page_erase_params.Sector = CALIBRATION_DATA_PAGE_ADDR;
-//	page_erase_params.TypeErase = FLASH_TYPEERASE_SECTORS;
-//
-//	if(HAL_FLASH_Unlock() == HAL_OK) // unlock flash memory
-//	{
-//		HAL_FLASHEx_Erase(&page_erase_params, &page_error);
-//
-//		// if erase operation was successful, save updated calibration data
-//		if(page_error == 0xFFFFFFFF)
-//		{
-//			for(uint16_t i = 0; i < sizeof(calibration_temp_data)/2; i++)
-//			{
-//				if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, CALIBRATION_DATA_PAGE_ADDR+2*i, calibration_temp_data[i]) != HAL_OK)
-//				{
-//					psu_calibration_ctrl.error_code = CAL_PROGRAM_FLASH_ERR; // emit flash program error
-//					break;
-//				}
-//			}
-//		}
-//		else
-//		{
-//			psu_calibration_ctrl.error_code = CAL_ERASE_FLASH_ERR; // emit flash erase error
-//		}
-//
-//		HAL_FLASH_Lock();
-//	}
-//	else
-//	{
-//		psu_calibration_ctrl.error_code = CAL_UNLOCK_FLASH_ERR; // emit flash unlock error
-//	}
+	uint16_t calibration_temp_data[CH2_CAL_DATA_OFFSET] = {0};
+	uint32_t offset = CH2_CAL_DATA_OFFSET*(uint32_t)ch/2;
+	uint32_t data_length_in_bytes = (uint32_t)sizeof(ChannelCalibrationData);
+
+	// fill calibration data structure header
+	ch_calibration->channel_id = (uint16_t)ch;
+	ch_calibration->voltageStepsNum = VOLTAGE_CALIB_STEPS_NUM;
+	ch_calibration->voltageDacStep = VOLTAGE_DAC_CALIBRATION_STEP;
+	ch_calibration->voltageMeasStep = VOLTAGE_MEAS_CALIBRATION_STEP;
+	ch_calibration->currentStepsNum = CURRENT_CALIB_STEPS_NUM;
+	ch_calibration->currentDacStep = CURRENT_DAC_CALIBRATION_STEP;
+	ch_calibration->currentMeasStep = CURRENT_MEAS_CALIBRATION_STEP;
+
+	// store flash data into the temp buffer
+	memcpy(calibration_temp_data, (uint32_t*)(CALIBRATION_DATA_PAGE_ADDR), sizeof(calibration_temp_data));
+
+	// update channel calibration data in the temp buffer
+	memcpy(calibration_temp_data+offset, ch_calibration, data_length_in_bytes);
+
+	// erase flash memory page
+	uint32_t page_error = HAL_OK;
+	FLASH_EraseInitTypeDef page_erase_params;
+
+	page_erase_params.NbSectors = 1;
+	page_erase_params.Banks = FLASH_BANK_1;
+	page_erase_params.Sector = GetSector(CALIBRATION_DATA_PAGE_ADDR);
+	page_erase_params.TypeErase = FLASH_TYPEERASE_SECTORS;
+	page_erase_params.VoltageRange = FLASH_VOLTAGE_RANGE_3;
+
+	if(HAL_FLASH_Unlock() == HAL_OK) // unlock flash memory
+	{
+		HAL_FLASHEx_Erase(&page_erase_params, &page_error);
+
+		// if erase operation was successful, save updated calibration data
+		if(page_error == 0xFFFFFFFF)
+		{
+			for(uint16_t i = 0; i < sizeof(calibration_temp_data)/2; i++)
+			{
+				if(HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD, CALIBRATION_DATA_PAGE_ADDR+2*i, calibration_temp_data[i]) != HAL_OK)
+				{
+					psu_calibration_ctrl.error_code = CAL_PROGRAM_FLASH_ERR; // emit flash program error
+					break;
+				}
+			}
+		}
+		else
+		{
+			psu_calibration_ctrl.error_code = CAL_ERASE_FLASH_ERR; // emit flash erase error
+		}
+
+		HAL_FLASH_Lock();
+	}
+	else
+	{
+		psu_calibration_ctrl.error_code = CAL_UNLOCK_FLASH_ERR; // emit flash unlock error
+	}
 
 	psu_calibration_ctrl.is_error = 1; // set error detection flag
 	psu_calibration_ctrl.is_state_changed = 1; // set calibration state changed flag
@@ -301,6 +304,13 @@ static uint8_t restoreValueFromCalibrationData(uint16_t value_in, uint16_t* arra
 	if(array == NULL || value_out == NULL)
 	{
 		return 0;
+	}
+
+	// skip negative values
+	if(value_in > 32767)
+	{
+		*value_out = value_in;
+		return 1;
 	}
 
 	// check is input value in array values range
@@ -732,8 +742,12 @@ void PSU_calibrationModeCtrl(PSU_Channel ch, uint8_t is_enabled, PSU_Calibration
 			psu_calibration_ctrl.is_measured_data_ready = 0;
 			psu_calibration_ctrl.is_state_changed = 0;
 
+			// reset change step indices
+			psu_channels_ctrl[ch]->voltageSetStepIdx = 0;
+			psu_channels_ctrl[ch]->currentSetStepIdx = 0;
+
 			// if calibration is finished save data into the flash
-			PSU_saveChannelCalibrationData(psu_calibration_ctrl.channel, psu_calibration_data[psu_calibration_ctrl.channel]);
+			PSU_saveChannelCalibrationData(ch, psu_calibration_data[ch]);
 		}
 		else
 		{
@@ -1097,4 +1111,65 @@ void PSU_updateTickHandler(void)
 		channel1_ui_data.is_update_reg |= UI_CALIB_UPD_MEAS_MASK;
 		channel2_ui_data.is_update_reg |= UI_CALIB_UPD_MEAS_MASK;
 	}
+}
+
+/**
+  * @brief  Gets the sector of a given address
+  * @param  None
+  * @retval The sector of a given address
+  */
+static uint32_t GetSector(uint32_t Address)
+{
+  uint32_t sector = 0;
+
+  if((Address < ADDR_FLASH_SECTOR_1) && (Address >= ADDR_FLASH_SECTOR_0))
+  {
+    sector = FLASH_SECTOR_0;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_2) && (Address >= ADDR_FLASH_SECTOR_1))
+  {
+    sector = FLASH_SECTOR_1;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_3) && (Address >= ADDR_FLASH_SECTOR_2))
+  {
+    sector = FLASH_SECTOR_2;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_4) && (Address >= ADDR_FLASH_SECTOR_3))
+  {
+    sector = FLASH_SECTOR_3;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_5) && (Address >= ADDR_FLASH_SECTOR_4))
+  {
+    sector = FLASH_SECTOR_4;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_6) && (Address >= ADDR_FLASH_SECTOR_5))
+  {
+    sector = FLASH_SECTOR_5;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_7) && (Address >= ADDR_FLASH_SECTOR_6))
+  {
+    sector = FLASH_SECTOR_6;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_8) && (Address >= ADDR_FLASH_SECTOR_7))
+  {
+    sector = FLASH_SECTOR_7;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_9) && (Address >= ADDR_FLASH_SECTOR_8))
+  {
+    sector = FLASH_SECTOR_8;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_10) && (Address >= ADDR_FLASH_SECTOR_9))
+  {
+    sector = FLASH_SECTOR_9;
+  }
+  else if((Address < ADDR_FLASH_SECTOR_11) && (Address >= ADDR_FLASH_SECTOR_10))
+  {
+    sector = FLASH_SECTOR_10;
+  }
+  else /* (Address < FLASH_END_ADDR) && (Address >= ADDR_FLASH_SECTOR_11) */
+  {
+    sector = FLASH_SECTOR_11;
+  }
+
+  return sector;
 }

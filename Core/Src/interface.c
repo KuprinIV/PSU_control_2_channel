@@ -675,6 +675,10 @@ static void updateUI(void)
 			if(channels_ui_data[i]->is_update_reg & UI_CALIB_UPD_EXIT_MASK)
 			{
 				is_calibration[i] = 0;
+
+				lv_obj_set_style_text_color(set_volt_lbl[i], lv_color_hex(set_parameters_lbl_text_colors[channels_ui_data[i]->channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
+				lv_obj_set_style_text_color(set_curr_lbl[i], lv_color_hex(set_parameters_lbl_text_colors[channels_ui_data[i]->channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+
 				lv_screen_load(main_control_scr);
 			}
 			else if(channels_ui_data[i]->is_update_reg & UI_CALIB_UPD_ERR_MASK)
@@ -696,6 +700,12 @@ static void updateUI(void)
 			// measured current
 			if(channels_ui_data[i]->is_update_reg & UI_UPDATE_MEAS_CURR_MASK)
 			{
+				// reject negative values
+				if(channels_ui_data[i]->channel_measured_data->current_ma < 0)
+				{
+					channels_ui_data[i]->channel_measured_data->current_ma = 0;
+				}
+
 				if(channels_ui_data[i]->channel_measured_data->current_ma < 1000)
 				{
 					lv_label_set_text_fmt(meas_curr_lbl[i], "%0.3f A", (float)channels_ui_data[i]->channel_measured_data->current_ma/1000.0f);
@@ -734,12 +744,12 @@ static void updateUI(void)
 				{
 					is_msg_box_displayed = 0;
 					lv_msgbox_close(msgbox);
+
+					lv_obj_set_style_text_color(set_curr_lbl[i], lv_color_hex(set_parameters_lbl_text_colors[channels_ui_data[i]->channel_set_values->currentSetStepIdx]), LV_PART_MAIN);
+
 					lv_screen_load(main_control_scr);
 				}
-				else
-				{
-					lv_obj_set_style_text_color(set_volt_lbl[i], lv_color_hex(set_parameters_lbl_text_colors[channels_ui_data[i]->channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
-				}
+				lv_obj_set_style_text_color(set_volt_lbl[i], lv_color_hex(set_parameters_lbl_text_colors[channels_ui_data[i]->channel_set_values->voltageSetStepIdx]), LV_PART_MAIN);
 			}
 
 			// set current limit value
