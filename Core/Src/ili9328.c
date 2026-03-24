@@ -38,6 +38,7 @@
 /* Includes ------------------------------------------------------------------*/
 #include "ili9328_io.h"
 #include "ili9328.h"
+#include "main.h"
 
 /** @addtogroup BSP
   * @{
@@ -238,6 +239,16 @@ void ili9328_DisplayOff(void)
   
   ili9328_WriteReg(LCD_REG_41, 0x0000); /* VCM[4:0] for VCOMH */
   
+}
+
+/**
+  * @brief  Display backlight control
+  * @param  is_enabled: 0 - disabled, 1 - enabled
+  * @retval None
+  */
+void ili9328_BacklightCtrl(uint8_t is_enabled)
+{
+	HAL_GPIO_WritePin(BL_CTRL_GPIO_Port, BL_CTRL_Pin, is_enabled & 0x01);
 }
 
 /**

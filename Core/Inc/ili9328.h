@@ -165,6 +165,8 @@ void     ili9328_SetDisplayWindow(uint16_t Xpos, uint16_t Ypos, uint16_t Width, 
 uint16_t ili9328_GetLcdPixelWidth(void);
 uint16_t ili9328_GetLcdPixelHeight(void);
 
+void 	ili9328_BacklightCtrl(uint8_t is_enabled);
+
 /* LCD driver structure */
 extern LCD_DrvTypeDef   ili9328_drv;
 
